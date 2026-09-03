@@ -297,7 +297,60 @@ class WatchlistManager:
         if not fast_mode:
             try:
                 sh_data = ShareholdingClient.fetch_shareholding_pattern(symbol, nse_client=nse_client)
-            except Exception:
+                if sh_data and sh_data.get("promoter_holding_pct") is not None:
+                    from src.db.models.governance import ShareholdingHistory
+                    import uuid
+                    raw_p_date = sh_data.get("period_end_date")
+                    if isinstance(raw_p_date, str):
+                        try:
+                            p_date = datetime.strptime(raw_p_date, "%Y-%m-%d").date()
+                        except Exception:
+                            p_date = today
+                    elif isinstance(raw_p_date, datetime):
+                        p_date = raw_p_date.date()
+                    elif isinstance(raw_p_date, date):
+                        p_date = raw_p_date
+                    else:
+                        p_date = today
+
+                    raw_pub = sh_data.get("publication_timestamp")
+                    if isinstance(raw_pub, str):
+                        try:
+                            pub_dt = datetime.fromisoformat(raw_pub)
+                        except Exception:
+                            pub_dt = datetime.utcnow()
+                    elif isinstance(raw_pub, datetime):
+                        pub_dt = raw_pub
+                    else:
+                        pub_dt = datetime.utcnow()
+
+                    existing_sh = db.query(ShareholdingHistory).filter_by(
+                        company_id=company.company_id,
+                        period_end_date=p_date
+                    ).first()
+                    if not existing_sh:
+                        sh_record = ShareholdingHistory(
+                            shareholding_id=str(uuid.uuid4()),
+                            company_id=company.company_id,
+                            period_end_date=p_date,
+                            publication_timestamp=pub_dt,
+                            promoter_holding_pct=sh_data.get("promoter_holding_pct"),
+                            promoter_pledge_pct=sh_data.get("promoter_pledge_pct") or 0.0,
+                            fii_holding_pct=sh_data.get("fii_holding_pct"),
+                            dii_holding_pct=sh_data.get("dii_holding_pct"),
+                            mf_holding_pct=sh_data.get("mf_holding_pct") or 0.0,
+                            other_dii_holding_pct=sh_data.get("other_dii_holding_pct") or 0.0,
+                            retail_public_pct=sh_data.get("retail_public_pct"),
+                            source=sh_data.get("source", "SCREENER_XBRL_LODR"),
+                            consolidation_scope=sh_data.get("consolidation_scope", "SEBI_LODR_PATTERN_FILING"),
+                            data_quality_flag=sh_data.get("data_quality_flag", "HIGH_CONFIDENCE")
+                        )
+                        db.add(sh_record)
+                        db.commit()
+                        logger.info(f"[Shareholding] Persisted verified pattern for {symbol} ({p_date}).")
+            except Exception as e:
+                db.rollback()
+                logger.warning(f"[Shareholding] Error persisting shareholding for {symbol}: {e}")
                 sh_data = None
 
         # 4. Official Regulatory Disclosures & Half-Life Decay Scoring
@@ -460,7 +513,7 @@ class WatchlistManager:
                     company_id=company.company_id,
                     t0_timestamp=datetime.utcnow(),
                     feature_vector=pit_features,
-                    m6_score=float(m6_record.get("m6_conviction_score", 0)),
+                    m6_score=float(m6_record.get("m6_conviction_score") or 0.0),
                     verdict=intel.get("primary_verdict", "NEUTRAL_WATCHLIST"),
                     horizon_ratings=intel.get("horizon_ratings", {}),
                     why_buy_reasons=intel.get("dual_thesis", {}).get("why_buy", []),

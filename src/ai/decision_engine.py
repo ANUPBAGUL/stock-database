@@ -98,20 +98,24 @@ class DecisionEngine:
 
         why_not_buy.append(f"[Liquidity Constraint] Max safe deployment capped at Rs.{max_position_size_cr:,.2f} Cr (<5% 20D ADV)")
 
+        lt_val = float(lt_score) if lt_score is not None else 0.0
+        sw_val = float(sw_score) if sw_score is not None else 0.0
+        intra_val = float(intra_score) if intra_score is not None else 0.0
+
         # Balanced Verdict & Position Sizing Guidance
-        if lt_score >= 75 and sw_score >= 60:
+        if lt_val >= 75 and sw_val >= 60:
             primary_verdict = "STRONG_MULTI_YEAR_BUY"
             horizon_recommendation = "Long-Term Compounder with Swing Tailwinds"
             sizing_guidance = "Full Position Size (100% Capital Allocation)"
-        elif sw_score >= 70:
+        elif sw_val >= 70:
             primary_verdict = "BULLISH_SWING_BREAKOUT"
             horizon_recommendation = "2-4 Weeks Swing Setup"
             sizing_guidance = "Standard Swing Allocation (Trailing Stop Active)"
-        elif intra_score >= 80:
+        elif intra_val >= 80:
             primary_verdict = "INTRADAY_MOMENTUM_PLAY"
             horizon_recommendation = "1-Day Breakout Scalp"
             sizing_guidance = "Day-Trade Risk Budget (1:2.0 RR Required)"
-        elif lt_score >= 65:
+        elif lt_val >= 65:
             primary_verdict = "ACCUMULATE_ON_DIPS"
             horizon_recommendation = "Long-Term Quality Watchlist"
             sizing_guidance = "Partial Allocation (50% Size on Pullbacks)"
@@ -218,8 +222,8 @@ class DecisionEngine:
         multibagger_discovery_matrix = {
             "q1_could_become_2x": {
                 "question": "Could this become a 2×?",
-                "assessment": f"High Probability ({lt_score}/100 Conviction Score)" if lt_score >= 75 else "Moderate Probability",
-                "score": lt_score,
+                "assessment": f"High Probability ({lt_val}/100 Conviction Score)" if lt_val >= 75 else "Moderate Probability",
+                "score": lt_val,
                 "latent_operational_upside": f"{latent_map['operational_leverage_multiplier']}x earnings capacity"
             },
             "q2_could_become_5x": {
@@ -229,7 +233,7 @@ class DecisionEngine:
                     if econ_roic["economic_roic_pct"] >= 20.0 and fcf_y > 1.5
                     else "Requires Sustained Growth Acceleration"
                 ),
-                "score": round(lt_score * 0.85, 1),
+                "score": round(lt_val * 0.85, 1),
                 "compounding_ceiling": f"{growth_reinvest['organic_compounding_ceiling_pct']}% p.a." if growth_reinvest['organic_compounding_ceiling_pct'] else "N/A"
             },
             "q3_could_become_10x": {
@@ -240,13 +244,13 @@ class DecisionEngine:
                     else f"Mathematically Constrained (Requires {tam_hurdle['required_niche_market_share_pct']}% market share)"
                 ),
                 "is_10x_plausible": tam_hurdle["is_10x_plausible"],
-                "score": round(lt_score * 0.65, 1) if tam_hurdle["is_10x_plausible"] else 30.0,
+                "score": round(lt_val * 0.65, 1) if tam_hurdle["is_10x_plausible"] else 30.0,
                 "tam_narrative": tam_hurdle["narrative"]
             },
             "q4_are_we_early": {
                 "question": "Are we early?",
                 "assessment": "Early Entry (Valuation in Reasonable Band)" if (pe_val and pe_val <= 45.0) else "Mid-Stage Compounder (Rerating Underway)",
-                "distance_from_t0_profile": "Optimal T0 Profile Match" if lt_score >= 80 else "Developing Pattern"
+                "distance_from_t0_profile": "Optimal T0 Profile Match" if lt_val >= 80 else "Developing Pattern"
             },
             "q5_why_could_it_happen": {
                 "question": "Why could it happen?",
