@@ -69,6 +69,10 @@ class WatchlistAppHandler(http.server.SimpleHTTPRequestHandler):
             self.handle_get_board_meetings(query)
         elif path == "/api/system/status":
             self.handle_system_status()
+        elif path == "/api/system/audit-report":
+            self.handle_audit_report()
+        elif path == "/api/system/run-validation":
+            self.handle_run_validation()
         elif path == "/api/upstox/status":
             self.handle_upstox_status()
         elif path == "/api/upstox/login-url":
@@ -319,10 +323,39 @@ class WatchlistAppHandler(http.server.SimpleHTTPRequestHandler):
                 "upstox_auth": auth_status,
                 "total_active_watchlist_stocks": count,
                 "primary_data_provider": "UPSTOX_V2_API",
-                "database": "multibagger.db"
+                "database": "stock_analysis.db"
             })
         finally:
             db.close()
+
+    def handle_audit_report(self):
+        """Returns live longitudinal health and 8 acceptance invariants audit"""
+        report_file = os.path.join(BASE_DIR, "institutional_validation_report.json")
+        if os.path.exists(report_file):
+            try:
+                with open(report_file, "r", encoding="utf-8") as f:
+                    data = json.load(f)
+                self.send_json_response({"success": True, "report": data})
+                return
+            except Exception as e:
+                logger.warning(f"Could not read validation report JSON: {e}")
+
+        # Compute live if file missing
+        try:
+            from scripts.audit_longitudinal_dataset import LongitudinalDatasetAuditor
+            audit_data = LongitudinalDatasetAuditor.run_comprehensive_audit()
+            self.send_json_response({"success": True, "report": {"dataset_health": audit_data}})
+        except Exception as e:
+            self.send_json_response({"success": False, "error": str(e)}, status=500)
+
+    def handle_run_validation(self):
+        """Executes full institutional validation suite and returns results"""
+        try:
+            from scripts.run_institutional_validation import execute_institutional_campaign
+            report = execute_institutional_campaign()
+            self.send_json_response({"success": True, "report": report})
+        except Exception as e:
+            self.send_json_response({"success": False, "error": str(e)}, status=500)
 
     def send_json_response(self, data: Any, status: int = 200):
         self.send_response(status)
