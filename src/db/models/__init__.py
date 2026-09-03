@@ -26,6 +26,7 @@ from src.db.models.regime import MarketRegimeHistory
 from src.db.models.identity_history import CompanyIdentityHistory
 from src.db.models.data_audit_trace import DataAuditTrace
 from src.db.models.research_feature_snapshot import ResearchFeatureSnapshot
+from src.db.models.research_eligibility import ResearchEligibility
 
 __all__ = [
     "Base",
@@ -63,5 +64,6 @@ __all__ = [
     "MarketRegimeHistory",
     "CompanyIdentityHistory",
     "DataAuditTrace",
-    "ResearchFeatureSnapshot"
+    "ResearchFeatureSnapshot",
+    "ResearchEligibility"
 ]

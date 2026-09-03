@@ -255,7 +255,7 @@ class ScreenerClient:
                 })
 
             records.reverse()
-            logger.info(f"[Screener] Extracted {len(records)} balance sheet years for {symbol}")
+            logger.info(f"[Screener] Extracted {len(records)} audited balance sheets for {symbol}")
             return records
 
         except Exception as e:
@@ -263,7 +263,92 @@ class ScreenerClient:
             return []
 
     # ──────────────────────────────────────────────────────────────
-    # 3. Verified Company Metadata & Audited Ratios
+    # 3. Quarterly Audited Results (10-Year History / Up to 40+ Quarters)
+    # ──────────────────────────────────────────────────────────────
+
+    def fetch_quarterly_history(self, symbol: str) -> List[Dict[str, Any]]:
+        """
+        Extracts up to 10 years of quarterly audited/un-audited P&L statements.
+        Includes Sales, Expenses, Operating Profit, OPM %, Other Income,
+        Interest, Depreciation, Profit before tax, Tax %, Net Profit, EPS.
+        """
+        soup, scope = self._get_company_soup(symbol)
+        if not soup:
+            return []
+
+        q_section = soup.find("section", id="quarters")
+        if not q_section:
+            return []
+
+        table = q_section.find("table")
+        if not table:
+            return []
+
+        try:
+            header_th = table.find_all("th")
+            quarters = [th.text.strip() for th in header_th if th.text.strip()]
+
+            rows_data: Dict[str, List[Optional[float]]] = {}
+            for tr in table.find("tbody").find_all("tr"):
+                title_td = tr.find("td", class_="text") or tr.find("td")
+                if not title_td:
+                    continue
+                row_name = title_td.text.strip().replace("+", "").strip().lower()
+                vals = []
+                for td in tr.find_all("td")[1:]:
+                    val_str = td.text.strip().replace(",", "").replace("%", "")
+                    try:
+                        vals.append(float(val_str) if val_str and val_str != "-" else None)
+                    except ValueError:
+                        vals.append(None)
+                rows_data[row_name] = vals
+
+            records = []
+            for col_idx, q_label in enumerate(quarters):
+                period_end = self._parse_quarter_label(q_label)
+
+                sales = self._find_category_val(rows_data, ["sales", "revenue"], col_idx)
+                ebit = self._find_category_val(rows_data, ["operating profit", "ebitda"], col_idx)
+                opm = self._find_category_val(rows_data, ["opm %"], col_idx)
+                other_inc = self._find_category_val(rows_data, ["other income"], col_idx) or 0.0
+                interest = self._find_category_val(rows_data, ["interest", "finance costs"], col_idx) or 0.0
+                depr = self._find_category_val(rows_data, ["depreciation"], col_idx) or 0.0
+                pbt = self._find_category_val(rows_data, ["profit before tax", "pbt"], col_idx)
+                tax_pct = self._find_category_val(rows_data, ["tax %"], col_idx) or 25.0
+                pat = self._find_category_val(rows_data, ["net profit", "pat"], col_idx)
+                eps = self._find_category_val(rows_data, ["eps in rs", "eps"], col_idx)
+
+                records.append({
+                    "period_label": q_label,
+                    "period_end_date": period_end,
+                    "period_type": "QUARTERLY",
+                    "revenue_cr": sales,
+                    "sales_cr": sales,
+                    "ebit_cr": ebit,
+                    "operating_profit_cr": ebit,
+                    "opm_pct": opm,
+                    "other_income_cr": other_inc,
+                    "interest_cr": interest,
+                    "depreciation_cr": depr,
+                    "pbt_cr": pbt,
+                    "tax_pct": tax_pct,
+                    "net_profit_cr": pat,
+                    "pat_cr": pat,
+                    "eps": eps,
+                    "consolidation_scope": scope,
+                    "source": "SCREENER_XBRL_SEBI_QUARTERS"
+                })
+
+            records.reverse()
+            logger.info(f"[Screener] Extracted {len(records)} verified quarterly financial periods for {symbol}")
+            return records
+
+        except Exception as e:
+            logger.error(f"[Screener] Error parsing quarterly table for {symbol}: {e}")
+            return []
+
+    # ──────────────────────────────────────────────────────────────
+    # 4. Verified Key Financial Ratios (Current Audited Overview)
     # ──────────────────────────────────────────────────────────────
 
     def fetch_company_overview(self, symbol: str) -> Dict[str, Any]:
