@@ -88,5 +88,7 @@ class LatentUpsideEngine:
             "distance_to_excellence_score": distance_score,
             "roce_gap_to_excellence_pct": roce_gap_pct,
             "latent_profile": profile,
-            "latent_narrative": narrative
+            "latent_narrative": narrative,
+            "evidence_source": "SECTOR_75TH_PERCENTILE_BENCHMARK",
+            "evidence_confidence": "HIGH_GROUNDED" if target_opm <= (curr_opm * 1.5) else "MEDIUM_STRETCH"
         }

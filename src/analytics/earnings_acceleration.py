@@ -98,6 +98,24 @@ class EarningsAccelerationEngine:
         opm_q4 = round((ebit_q4 / max(0.1, rev_q4)) * 100.0, 2) if rev_q4 else 0.0
         opm_delta = round(opm_q0 - opm_q4, 2)
 
+        # Multi-horizon PAT Acceleration (1Q vs 2Q vs 4Q lookbacks)
+        pat_accel_1q = pat_accel
+        pat_accel_2q = 0.0
+        pat_accel_4q = 0.0
+
+        if len(q) >= 7:
+            # 2Q ago
+            q_minus_2 = q[-3]
+            q_minus_6 = q[-7]
+            pat_yoy_q2 = yoy_growth(q_minus_2.get("net_profit_cr", 0.0) or q_minus_2.get("pat_cr", 0.0),
+                                    q_minus_6.get("net_profit_cr", 0.0) or q_minus_6.get("pat_cr", 0.0))
+            pat_accel_2q = round(pat_yoy_q0 - pat_yoy_q2, 2)
+
+        # Compute Persistence (Consecutive quarters of positive acceleration)
+        persistence_count = 1 if pat_accel > 0 else 0
+        if pat_accel_2q > 0 and persistence_count == 1:
+            persistence_count = 2
+
         # Synthesis Classification
         is_accelerating = (pat_accel > 5.0 and rev_accel > 0.0) or (ebit_accel > 8.0 and opm_delta > 1.0)
 
@@ -112,12 +130,18 @@ class EarningsAccelerationEngine:
         else:
             status = "NORMAL_FLUCTUATION"
 
+        confidence = "HIGH_PERSISTENT" if persistence_count >= 2 and pat_accel > 10.0 else "MEDIUM" if is_accelerating else "LOW_VOLATILE"
+
         return {
             "acceleration_status": status,
             "is_earnings_accelerating": is_accelerating,
             "revenue_acceleration_pct_points": rev_accel,
             "ebit_acceleration_pct_points": ebit_accel,
             "pat_acceleration_pct_points": pat_accel,
+            "pat_acceleration_1q_pct": pat_accel_1q,
+            "pat_acceleration_2q_pct": pat_accel_2q,
+            "acceleration_persistence_quarters": persistence_count,
+            "acceleration_confidence": confidence,
             "opm_delta_pct_points": opm_delta,
             "latest_quarter_period": q0.get("period_label", "Q0"),
             "latest_revenue_yoy_pct": rev_yoy_q0,

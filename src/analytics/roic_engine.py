@@ -58,17 +58,26 @@ class EconomicROICEngine:
         min_ic_delta_pct: float = 0.05, # Minimum 5% change in IC to avoid small denominator explosion
     ) -> Dict[str, Any]:
         """
-        Computes 3-Year Rolling Incremental Return on Invested Capital (ROIIC):
+        Computes 1-Year, 2-Year, and 3-Year Rolling Incremental Return on Invested Capital (ROIIC):
         ROIIC = (NOPAT_t - NOPAT_t-n) / (Invested_Capital_t - Invested_Capital_t-n)
         
-        Includes denominator safeguards to prevent infinity/division-by-zero on asset-light quarters.
+        Preserves all raw building blocks (Delta NOPAT, Delta IC, Delta Revenue, Delta EBIT)
+        and flags validity vs. capital-unchanged asset-light regimes.
         """
         if not history_periods or len(history_periods) < 2:
             return {
                 "rolling_roiic_pct": None,
+                "roiic_1y_pct": None,
+                "roiic_2y_pct": None,
+                "roiic_3y_pct": None,
                 "roiic_status": "INSUFFICIENT_HISTORY",
+                "roiic_validity_flag": "INSUFFICIENT_DATA",
+                "roiic_confidence": "LOW",
                 "delta_nopat_cr": 0.0,
                 "delta_ic_cr": 0.0,
+                "delta_revenue_cr": 0.0,
+                "delta_ebit_cr": 0.0,
+                "capital_deployment_intensity_pct": 0.0,
                 "lookback_quarters_used": 0,
             }
 
@@ -76,7 +85,24 @@ class EconomicROICEngine:
         periods = sorted(history_periods, key=lambda x: x.get("period_end_date", ""))
         current = periods[-1]
 
-        # Select lookback target (3 years / 12 quarters or maximum available)
+        # Multi-Horizon Lookbacks (1Y = 4Q, 2Y = 8Q, 3Y = 12Q)
+        def compute_horizon_roiic(q_lookback: int) -> Optional[float]:
+            if len(periods) <= 1:
+                return None
+            idx = max(0, len(periods) - 1 - q_lookback)
+            base = periods[idx]
+            d_nop = current.get("nopat_cr", 0.0) - base.get("nopat_cr", 0.0)
+            d_ic = current.get("invested_capital_cr", 1.0) - base.get("invested_capital_cr", 1.0)
+            threshold = max(5.0, base.get("invested_capital_cr", 1.0) * min_ic_delta_pct)
+            if abs(d_ic) >= threshold:
+                return round((d_nop / d_ic) * 100.0, 2)
+            return None
+
+        roiic_1y = compute_horizon_roiic(4)
+        roiic_2y = compute_horizon_roiic(8)
+        roiic_3y = compute_horizon_roiic(12)
+
+        # Primary 3Y/Max lookback selection
         idx_lookback = max(0, len(periods) - 1 - lookback_quarters)
         baseline = periods[idx_lookback]
 
@@ -87,16 +113,28 @@ class EconomicROICEngine:
 
         delta_nopat = curr_nopat - base_nopat
         delta_ic = curr_ic - base_ic
+        delta_rev = current.get("revenue_cr", 0.0) - baseline.get("revenue_cr", 0.0)
+        delta_ebit = current.get("ebit_cr", 0.0) - baseline.get("ebit_cr", 0.0)
+
+        # Capital deployment intensity (Delta IC / Base IC)
+        deployment_intensity = round((delta_ic / max(1.0, base_ic)) * 100.0, 2)
 
         # Denominator threshold safeguard
         min_ic_threshold = max(5.0, base_ic * min_ic_delta_pct)
         if abs(delta_ic) < min_ic_threshold:
-            # Asset-light expansion or capital unchanged: ROIIC not meaningful via formula
             return {
                 "rolling_roiic_pct": None,
+                "roiic_1y_pct": roiic_1y,
+                "roiic_2y_pct": roiic_2y,
+                "roiic_3y_pct": roiic_3y,
                 "roiic_status": "CAPITAL_UNCHANGED_ASSET_LIGHT",
+                "roiic_validity_flag": "CAPITAL_UNCHANGED_ASSET_LIGHT",
+                "roiic_confidence": "HIGH",
                 "delta_nopat_cr": round(delta_nopat, 2),
                 "delta_ic_cr": round(delta_ic, 2),
+                "delta_revenue_cr": round(delta_rev, 2),
+                "delta_ebit_cr": round(delta_ebit, 2),
+                "capital_deployment_intensity_pct": deployment_intensity,
                 "lookback_quarters_used": len(periods) - 1 - idx_lookback,
             }
 
@@ -113,11 +151,21 @@ class EconomicROICEngine:
         else:
             quality = "VALUE_DESTRUCTION"
 
+        confidence = "HIGH_MULTI_YEAR" if len(periods) >= 8 else "MEDIUM_LIMITED_HISTORY"
+
         return {
             "rolling_roiic_pct": rolling_roiic,
+            "roiic_1y_pct": roiic_1y,
+            "roiic_2y_pct": roiic_2y,
+            "roiic_3y_pct": roiic_3y,
             "roiic_status": quality,
+            "roiic_validity_flag": "VALID_CAPITAL_DEPLOYMENT",
+            "roiic_confidence": confidence,
             "delta_nopat_cr": round(delta_nopat, 2),
             "delta_ic_cr": round(delta_ic, 2),
+            "delta_revenue_cr": round(delta_rev, 2),
+            "delta_ebit_cr": round(delta_ebit, 2),
+            "capital_deployment_intensity_pct": deployment_intensity,
             "lookback_quarters_used": len(periods) - 1 - idx_lookback,
         }
 

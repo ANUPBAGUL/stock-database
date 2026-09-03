@@ -471,6 +471,83 @@ class WatchlistManager:
                                          .get("invalidation_criteria", [])
                     },
                 )
+
+                # 6b. Record dedicated Point-in-Time ResearchFeatureSnapshot for post-experiment Model M7 training
+                try:
+                    import uuid
+                    import json
+                    from src.db.models.research_feature_snapshot import ResearchFeatureSnapshot
+                    from src.analytics.roic_engine import EconomicROICEngine
+                    from src.analytics.reinvestment_calculator import ReinvestmentCalculator
+                    from src.analytics.tam_engine import ReverseTAMHurdleEngine
+                    from src.analytics.earnings_acceleration import EarningsAccelerationEngine
+                    from src.analytics.ownership_velocity import OwnershipVelocityEngine
+                    from src.analytics.competitive_engine import CompetitivePositionEngine
+                    from src.analytics.lifecycle_classifier import LifecycleClassifier
+                    from src.analytics.latent_upside_engine import LatentUpsideEngine
+
+                    # Compute all 8 economic research lenses
+                    rev = pit_features.get("ttm_revenue_cr", 500.0)
+                    pat = pit_features.get("ttm_pat_cr", rev * 0.10)
+                    ebit = pit_features.get("ttm_ebit_cr", rev * 0.15)
+                    pe = pit_features.get("trailing_pe", 25.0)
+                    mcap = max(100.0, pe * pat)
+
+                    tam_dat = ReverseTAMHurdleEngine.resolve_industry_tam(symbol, getattr(company.sector, "sector_name", "General"))
+                    tam_res = ReverseTAMHurdleEngine.evaluate_10x_reverse_hurdle(mcap, rev, pat, tam_dat["niche_tam_cr"], tam_dat["macro_tam_cr"])
+                    roic_res = EconomicROICEngine.calculate_economic_roic(ebit, 25.0, rev * 0.5, rev * 0.2)
+                    capex_res = ReinvestmentCalculator.calculate_growth_vs_maintenance_capex(rev * 0.08, rev * 0.04, rev, rev * 0.85)
+                    reinvest_res = ReinvestmentCalculator.calculate_growth_reinvestment_rate(capex_res["growth_capex_cr"], rev * 0.03, roic_res["nopat_cr"], roic_res["economic_roic_pct"])
+                    moat_res = CompetitivePositionEngine.evaluate_displacement_dynamics(symbol, getattr(company.sector, "sector_name", "General"), pit_features.get("revenue_growth_yoy_pct", 20.0))
+                    latent_res = LatentUpsideEngine.calculate_latent_upside_map(rev, ebit, pat, mcap, pit_features.get("ttm_roce_pct", 20.0))
+                    coords_res = LifecycleClassifier.calculate_continuous_lifecycle_coordinates(mcap, pit_features.get("revenue_growth_yoy_pct", 20.0), pit_features.get("pat_growth_yoy_pct", 25.0), pit_features.get("ttm_roce_pct", 20.0), 10.0, pe)
+
+                    # Deduplicate: Check if snapshot exists for this company on today's date
+                    existing_snap = db.query(ResearchFeatureSnapshot).filter_by(company_id=company.company_id, observation_date=today).first()
+                    if not existing_snap:
+                        rf_snap = ResearchFeatureSnapshot(
+                            snapshot_id=str(uuid.uuid4()),
+                            company_id=company.company_id,
+                            observation_date=today,
+                            t0_timestamp=datetime.utcnow(),
+                            economic_roic_pct=roic_res["economic_roic_pct"],
+                            capex_total_cr=capex_res["total_capex_cr"],
+                            growth_capex_cr=capex_res["growth_capex_cr"],
+                            maintenance_capex_cr=capex_res["maintenance_capex_cr"],
+                            growth_reinvestment_rate_pct=reinvest_res["growth_reinvestment_rate_pct"],
+                            organic_compounding_ceiling_pct=reinvest_res["organic_compounding_ceiling_pct"],
+                            maintenance_capex_method=capex_res["maintenance_capex_method"],
+                            maintenance_capex_confidence=capex_res["maintenance_capex_confidence"],
+                            niche_tam_cr=tam_res["niche_tam_cr"],
+                            macro_tam_cr=tam_res["macro_tam_cr"],
+                            sam_cr=tam_res["sam_serviceable_cr"],
+                            som_cr=tam_res["som_obtainable_cr"],
+                            current_niche_share_pct=tam_res["current_niche_market_share_pct"],
+                            required_10x_niche_share_pct=tam_res["required_niche_market_share_pct"],
+                            tam_feasibility=tam_res["feasibility"],
+                            is_10x_plausible=tam_res["is_10x_plausible"],
+                            displacement_mode=moat_res["displacement_mode"],
+                            moat_rating=moat_res["economic_moat_rating"],
+                            scale_coord=coords_res["scale_coordinate"],
+                            reinvestment_coord=coords_res["reinvestment_intensity_coordinate"],
+                            efficiency_coord=coords_res["capital_efficiency_coordinate"],
+                            operating_leverage_coord=coords_res["operating_leverage_coordinate"],
+                            float_discovery_coord=coords_res["institutional_discovery_coordinate"],
+                            valuation_coord=coords_res["valuation_rerating_coordinate"],
+                            transition_signature=coords_res["transition_signature"],
+                            operational_leverage_multiplier=latent_res["operational_leverage_multiplier"],
+                            distance_to_excellence_score=latent_res["distance_to_excellence_score"],
+                            potential_pat_excellence_cr=latent_res["potential_pat_at_excellence_cr"],
+                            latent_evidence_source=latent_res["evidence_source"],
+                            latent_evidence_confidence=latent_res["evidence_confidence"],
+                            feature_vector_json=json.dumps(pit_features)
+                        )
+                        db.add(rf_snap)
+                        db.commit()
+                        logger.info(f"[Research Feature Store] Persisted T0 vector {rf_snap.snapshot_id} for {symbol}.")
+                except Exception as e:
+                    logger.warning(f"[Research Feature Store] Error persisting feature snapshot for {symbol}: {e}")
+
             except Exception as e:
                 logger.warning(f"[Snapshot] Could not record T0 snapshot for {symbol}: {e}")
 

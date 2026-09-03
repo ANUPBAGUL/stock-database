@@ -165,7 +165,10 @@ class ReinvestmentCalculator:
             "growth_capex_cr": growth_capex,
             "growth_capex_share_pct": growth_share_pct,
             "maintenance_depr_coverage_ratio": round(maint_capex / depr, 2),
-            "methodology": "GREENWALD_DEPRECIATION_CLAMPED"
+            "depreciation_cr": round(depr, 2),
+            "maintenance_capex_method": "GREENWALD_DEPRECIATION_CLAMPED",
+            "maintenance_capex_confidence": "HIGH" if capex >= maint_capex else "ESTIMATED_CLAMPED",
+            "replacement_cost_inflation_pct": inflation_rate_pct
         }
 
     @staticmethod

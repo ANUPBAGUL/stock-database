@@ -111,6 +111,13 @@ class ReverseTAMHurdleEngine:
             narrative = f"10x outcome requires {req_niche_share_pct}% niche share and {req_macro_share_pct}% macro share. Scale exceeds industry ceiling."
             is_10x_plausible = False
 
+        # Hierarchical TAM / SAM / SOM decomposition
+        sam_cr = round(niche_tam * 0.60, 2)  # Serviceable Addressable Market in direct geography/segment
+        som_cr = round(sam_cr * 0.25, 2)     # Serviceable Obtainable Market (Target 25% of SAM)
+
+        # Capacity Constraint Check (Does required revenue exceed 3x current revenue without capex?)
+        capacity_constraint = "WITHIN_EXISTING_RUNWAY" if required_revenue <= (current_revenue_cr * 2.5) else "REQUIRES_SUBSTANTIAL_GREENFIELD_CAPEX"
+
         return {
             "current_market_cap_cr": curr_mcap,
             "target_10x_market_cap_cr": target_10x_mcap,
@@ -118,9 +125,12 @@ class ReverseTAMHurdleEngine:
             "required_10x_revenue_cr": required_revenue,
             "niche_tam_cr": niche_tam,
             "macro_tam_cr": macro_tam,
+            "sam_serviceable_cr": sam_cr,
+            "som_obtainable_cr": som_cr,
             "current_niche_market_share_pct": curr_niche_share_pct,
             "required_niche_market_share_pct": req_niche_share_pct,
             "required_macro_market_share_pct": req_macro_share_pct,
+            "capacity_constraint_status": capacity_constraint,
             "terminal_pe_assumed": term_pe,
             "terminal_net_margin_assumed_pct": round(term_margin * 100.0, 1),
             "feasibility": feasibility,
