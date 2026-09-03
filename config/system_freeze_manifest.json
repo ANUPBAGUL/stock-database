@@ -1,0 +1,67 @@
+{
+  "manifest_name": "PRODUCTION_VALIDATION_V2_SYSTEM_FREEZE",
+  "freeze_status": "LOCKED",
+  "effective_date": "2026-09-02",
+  "validation_period_days": 90,
+  "stage_schedule": {
+    "stage_1_infrastructure": "Days 1-30 (Data Truth, PIT Integrity, Corporate Actions, Failover)",
+    "stage_2_signal_validity": "Days 31-60 (Rankings, Consistency, Decision Integrity)",
+    "stage_3_paper_trading": "Days 61-90 (Execution Friction, Slippage, Counterfactual Alpha)"
+  },
+  "frozen_components": {
+    "m6_longterm_model": {
+      "model_id": "M6_PROSPECTIVE_FROZEN",
+      "model_version": "v2.0-m6-frozen-research",
+      "model_code_hash": "da0aedd8b0c986ab3269b2d2a45eb3595f5dc8172909403a5c1050a4175ec788",
+      "weights": {
+        "moat_solvency": 0.35,
+        "growth": 0.25,
+        "momentum": 0.20,
+        "valuation": 0.20
+      },
+      "weights_hash": "da0aedd8b0c986ab3269b2d2a45eb3595f5dc8172909403a5c1050a4175ec788",
+      "evidence_tier": "TIER_1_HISTORICALLY_VALIDATED",
+      "experiment_id": "EXP-004",
+      "modification_allowed": false
+    },
+    "swing_momentum_engine": {
+      "model_version": "v2.0-swing-momentum-atr",
+      "rsi_entry_range": [52, 68],
+      "trend_filter": "CLOSE >= 50_DMA",
+      "stop_loss_multiplier": 1.5,
+      "target_multiplier": 2.5,
+      "holding_period_days": [14, 28],
+      "evidence_tier": "TIER_2_WALK_FORWARD_TESTED",
+      "modification_allowed": false
+    },
+    "intraday_breakout_engine": {
+      "model_version": "v2.0-intraday-breakout-rr",
+      "volume_spike_threshold_adv": 1.5,
+      "target_risk_reward": "1:2.0",
+      "max_holding_hours": 6,
+      "evidence_tier": "TIER_3_HEURISTIC_RULE_BASED",
+      "modification_allowed": false
+    },
+    "risk_engine_limits": {
+      "single_stock_nav_cap_pct": 5.0,
+      "sector_concentration_cap_pct": 20.0,
+      "max_adv_participation_pct": 5.0,
+      "portfolio_drawdown_breaker_pct": -10.0,
+      "modification_allowed": false
+    },
+    "statutory_transaction_costs_india": {
+      "delivery_stt_buy_pct": 0.10,
+      "delivery_stt_sell_pct": 0.10,
+      "intraday_stt_sell_pct": 0.025,
+      "gst_rate_pct": 18.0,
+      "sebi_turnover_fee_per_cr_inr": 10.0,
+      "base_slippage_pct": 0.15
+    },
+    "benchmark": {
+      "primary_benchmark": "NIFTY_500_TOTAL_RETURN_INDEX",
+      "counterfactual_shadow_model": "ADVERSARIAL_SHADOW_V1",
+      "baseline_factor_strategy": "EQUAL_WEIGHT_VALUE_MOMENTUM_BASELINE"
+    }
+  },
+  "intervention_policy": "STRICT_AUDIT_LOG_ONLY. No feature, weight, or threshold updates allowed during the 90-day validation window."
+}

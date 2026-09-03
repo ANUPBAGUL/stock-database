@@ -1,0 +1,290 @@
+[
+  {
+    "isin": "INE002A01018",
+    "nse_symbol": "RELIANCE",
+    "bse_code": "500325",
+    "company_name": "Reliance Industries Limited",
+    "sector": "Energy & Oil",
+    "industry": "Oil & Gas Refining & Marketing",
+    "listing_date": "1977-11-29"
+  },
+  {
+    "isin": "INE040A01034",
+    "nse_symbol": "HDFCBANK",
+    "bse_code": "500180",
+    "company_name": "HDFC Bank Limited",
+    "sector": "Banking & Financials",
+    "industry": "Private Sector Bank",
+    "listing_date": "1995-11-08"
+  },
+  {
+    "isin": "INE009A01021",
+    "nse_symbol": "INFY",
+    "bse_code": "500209",
+    "company_name": "Infosys Limited",
+    "sector": "Technology & Services",
+    "industry": "IT Consulting & Software",
+    "listing_date": "1993-02-08"
+  },
+  {
+    "isin": "INE467B01029",
+    "nse_symbol": "TCS",
+    "bse_code": "532540",
+    "company_name": "Tata Consultancy Services Limited",
+    "sector": "Technology & Services",
+    "industry": "IT Consulting & Software",
+    "listing_date": "2004-08-25"
+  },
+  {
+    "isin": "INE090A01021",
+    "nse_symbol": "ICICIBANK",
+    "bse_code": "532174",
+    "company_name": "ICICI Bank Limited",
+    "sector": "Banking & Financials",
+    "industry": "Private Sector Bank",
+    "listing_date": "1997-09-17"
+  },
+  {
+    "isin": "INE238A01034",
+    "nse_symbol": "AXISBANK",
+    "bse_code": "532215",
+    "company_name": "Axis Bank Limited",
+    "sector": "Banking & Financials",
+    "industry": "Private Sector Bank",
+    "listing_date": "1998-11-16"
+  },
+  {
+    "isin": "INE296A01024",
+    "nse_symbol": "BAJFINANCE",
+    "bse_code": "500034",
+    "company_name": "Bajaj Finance Limited",
+    "sector": "Banking & Financials",
+    "industry": "Non-Banking Financial Company (NBFC)",
+    "listing_date": "1991-03-25"
+  },
+  {
+    "isin": "INE018A01030",
+    "nse_symbol": "LT",
+    "bse_code": "500510",
+    "company_name": "Larsen & Toubro Limited",
+    "sector": "Industrials & Capital Goods",
+    "industry": "Engineering & Construction",
+    "listing_date": "1946-02-07"
+  },
+  {
+    "isin": "INE062A01020",
+    "nse_symbol": "SBIN",
+    "bse_code": "500112",
+    "company_name": "State Bank of India",
+    "sector": "Banking & Financials",
+    "industry": "Public Sector Bank",
+    "listing_date": "1995-03-01"
+  },
+  {
+    "isin": "INE155A01022",
+    "nse_symbol": "TATAMOTORS",
+    "bse_code": "500570",
+    "company_name": "Tata Motors Limited",
+    "sector": "Automotive",
+    "industry": "Commercial & Passenger Vehicles",
+    "listing_date": "1998-07-22"
+  },
+  {
+    "isin": "INE205A01025",
+    "nse_symbol": "VEDL",
+    "bse_code": "500295",
+    "company_name": "Vedanta Limited",
+    "sector": "Materials & Metals",
+    "industry": "Diversified Metals",
+    "listing_date": "1998-05-18"
+  },
+  {
+    "isin": "INE200M01039",
+    "nse_symbol": "VBL",
+    "bse_code": "540180",
+    "company_name": "Varun Beverages Limited",
+    "sector": "Consumer Staples",
+    "industry": "Beverages",
+    "listing_date": "2016-11-08"
+  },
+  {
+    "isin": "INE849A01020",
+    "nse_symbol": "TRENT",
+    "bse_code": "500251",
+    "company_name": "Trent Limited",
+    "sector": "Consumer Discretionary",
+    "industry": "Retailing",
+    "listing_date": "1998-10-07"
+  },
+  {
+    "isin": "INE935N01020",
+    "nse_symbol": "DIXON",
+    "bse_code": "540699",
+    "company_name": "Dixon Technologies (India) Limited",
+    "sector": "Consumer Discretionary",
+    "industry": "Electronic Manufacturing Services",
+    "listing_date": "2017-09-18"
+  },
+  {
+    "isin": "INE263A01024",
+    "nse_symbol": "BEL",
+    "bse_code": "500049",
+    "company_name": "Bharat Electronics Limited",
+    "sector": "Industrials & Capital Goods",
+    "industry": "Defence Electronics",
+    "listing_date": "1990-10-29"
+  },
+  {
+    "isin": "INE066F01020",
+    "nse_symbol": "HAL",
+    "bse_code": "541154",
+    "company_name": "Hindustan Aeronautics Limited",
+    "sector": "Industrials & Capital Goods",
+    "industry": "Aircraft Manufacturing & Defence",
+    "listing_date": "2018-03-28"
+  },
+  {
+    "isin": "INE117A01022",
+    "nse_symbol": "ABB",
+    "bse_code": "500002",
+    "company_name": "ABB India Limited",
+    "sector": "Industrials & Capital Goods",
+    "industry": "Heavy Electrical Equipment",
+    "listing_date": "1995-02-01"
+  },
+  {
+    "isin": "INE003A01024",
+    "nse_symbol": "SIEMENS",
+    "bse_code": "500550",
+    "company_name": "Siemens Limited",
+    "sector": "Industrials & Capital Goods",
+    "industry": "Electrical Equipment & Infrastructure",
+    "listing_date": "1971-03-13"
+  },
+  {
+    "isin": "INE752E01010",
+    "nse_symbol": "POLYCAB",
+    "bse_code": "542652",
+    "company_name": "Polycab India Limited",
+    "sector": "Industrials & Capital Goods",
+    "industry": "Wires & Cables",
+    "listing_date": "2019-04-16"
+  },
+  {
+    "isin": "INE213A01029",
+    "nse_symbol": "KEI",
+    "bse_code": "533269",
+    "company_name": "KEI Industries Limited",
+    "sector": "Industrials & Capital Goods",
+    "industry": "Wires & Cables",
+    "listing_date": "2010-08-06"
+  },
+  {
+    "isin": "INE047A01021",
+    "nse_symbol": "GRASIM",
+    "bse_code": "500300",
+    "company_name": "Grasim Industries Limited",
+    "sector": "Materials & Metals",
+    "industry": "Textiles & Cement",
+    "listing_date": "1990-05-25"
+  },
+  {
+    "isin": "INE154A01025",
+    "nse_symbol": "ITC",
+    "bse_code": "500875",
+    "company_name": "ITC Limited",
+    "sector": "Consumer Staples",
+    "industry": "Diversified FMCG & Cigarettes",
+    "listing_date": "1975-01-01"
+  },
+  {
+    "isin": "INE030A01027",
+    "nse_symbol": "HINDUNILVR",
+    "bse_code": "500696",
+    "company_name": "Hindustan Unilever Limited",
+    "sector": "Consumer Staples",
+    "industry": "Personal Care & Household Products",
+    "listing_date": "1956-01-01"
+  },
+  {
+    "isin": "INE585B01010",
+    "nse_symbol": "MARUTI",
+    "bse_code": "532500",
+    "company_name": "Maruti Suzuki India Limited",
+    "sector": "Automotive",
+    "industry": "Passenger Cars & Utility Vehicles",
+    "listing_date": "2003-07-09"
+  },
+  {
+    "isin": "INE044A01036",
+    "nse_symbol": "SUNPHARMA",
+    "bse_code": "524715",
+    "company_name": "Sun Pharmaceutical Industries Limited",
+    "sector": "Healthcare & Pharma",
+    "industry": "Pharmaceuticals & Formulations",
+    "listing_date": "1994-12-08"
+  },
+  {
+    "isin": "INE081A01020",
+    "nse_symbol": "TATASTEEL",
+    "bse_code": "500470",
+    "company_name": "Tata Steel Limited",
+    "sector": "Materials & Metals",
+    "industry": "Iron & Steel Products",
+    "listing_date": "1956-01-01"
+  },
+  {
+    "isin": "INE239A01024",
+    "nse_symbol": "NESTLEIND",
+    "bse_code": "500790",
+    "company_name": "Nestle India Limited",
+    "sector": "Consumer Staples",
+    "industry": "Packaged Foods & Dairy",
+    "listing_date": "1960-01-01"
+  },
+  {
+    "isin": "INE280A01028",
+    "nse_symbol": "TITAN",
+    "bse_code": "500114",
+    "company_name": "Titan Company Limited",
+    "sector": "Consumer Discretionary",
+    "industry": "Jewellery & Watches",
+    "listing_date": "1987-03-24"
+  },
+  {
+    "isin": "INE066A01021",
+    "nse_symbol": "EICHERMOT",
+    "bse_code": "505200",
+    "company_name": "Eicher Motors Limited",
+    "sector": "Automotive",
+    "industry": "Two Wheelers & Royal Enfield",
+    "listing_date": "1987-01-01"
+  },
+  {
+    "isin": "INE528G01035",
+    "nse_symbol": "YESBANK",
+    "bse_code": "532648",
+    "company_name": "Yes Bank Limited",
+    "sector": "Banking & Financials",
+    "industry": "Private Sector Bank",
+    "listing_date": "2005-07-12"
+  },
+  {
+    "isin": "INE006A01017",
+    "nse_symbol": "ASTRAL",
+    "bse_code": "532830",
+    "company_name": "Astral Limited",
+    "sector": "Industrials & Capital Goods",
+    "industry": "Pipes & Fittings",
+    "listing_date": "2007-03-20"
+  },
+  {
+    "isin": "INE522F01014",
+    "nse_symbol": "COALINDIA",
+    "bse_code": "533278",
+    "company_name": "Coal India Limited",
+    "sector": "Energy & Oil",
+    "industry": "Coal Mining",
+    "listing_date": "2010-11-04"
+  }
+]

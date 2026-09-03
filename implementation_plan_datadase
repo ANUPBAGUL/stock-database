@@ -1,0 +1,227 @@
+# Architecture & Implementation Plan: Institutional Point-in-Time (PIT) Truth Database
+
+This document establishes the blueprint for engineering an audit-grade **Point-in-Time (PIT) Truth Database** for Indian Equities (NSE/BSE), eliminating all simulated, hardcoded, or generic media noise.
+
+---
+
+## 1. The Core Truth Hierarchy
+
+Every observation in the system adheres strictly to the directional flow:
+
+$$\text{Real World Facts} \longrightarrow \text{Raw Immutable Feed} \longrightarrow \text{PIT Normalized Truth Layer} \longrightarrow \text{Feature Store} \longrightarrow \text{Decision Engine}$$
+
+```
+                                      REAL WORLD (NSE / BSE / REGULATORS)
+                                                      │
+                       ┌──────────────────────────────┼──────────────────────────────┐
+                       ▼                              ▼                              ▼
+                 Exchange Feeds                Company Filings                 Macro / Industry
+              (Prices, Vol, Actions)       (SEBI LODR, XBRL, Results)        (VIX, Rates, Crude, RBI)
+                       │                              │                              │
+                       └──────────────────────────────┼──────────────────────────────┘
+                                                      ▼
+                              ┌──────────────────────────────────────────────┐
+                              │  LAYER 1: RAW IMMUTABLE INGESTION LAYER      │
+                              │  • Exact HTTP payloads / PDF / JSON archives │
+                              │  • Hash verified (SHA-256)                   │
+                              │  • Stored in `data/raw/` with exact metadata │
+                              └──────────────────────┬───────────────────────┘
+                                                      ▼
+                              ┌──────────────────────────────────────────────┐
+                              │  LAYER 2: NORMALIZED PIT TRUTH DATABASE      │
+                              │  • Bitemporal (valid_time vs system_time)    │
+                              │  • Strict `publication_timestamp` on all rows│
+                              │  • Provenance: source doc, version, parser ID│
+                              └──────────────────────┬───────────────────────┘
+                                                      ▼
+                              ┌──────────────────────────────────────────────┐
+                              │  LAYER 3: POINT-IN-TIME FEATURE STORE        │
+                              │  • Computed strictly for Date T using PIT    │
+                              │  • Accelerated metrics (EPS/Rev CAGR, ROCE)  │
+                              │  • Zero Look-Ahead Bias Guarantee            │
+                              └──────────────────────┬───────────────────────┘
+                                                      ▼
+                              ┌──────────────────────────────────────────────┐
+                              │  LAYER 4: DECISION & TRUTH OUTCOME LOGS      │
+                              │  • Pre-trade prediction states (T0)          │
+                              │  • Realized outcomes (T1): PnL, MAE, MFE     │
+                              └──────────────────────────────────────────────┘
+```
+
+---
+
+## 2. Real-World Data Feasibility & Ingestion Matrix
+
+Every data entity maps to a verified, accessible data source with no simulated or placeholder feeds:
+
+| Domain | Data Entity | Exact Feasible Source | Access Method | Cost / Auth | Historical Depth |
+| :--- | :--- | :--- | :--- | :--- | :--- |
+| **Master & Identity** | Securities, ISIN, Symbol Changes | **Upstox NSE Master CDN** & **NSE `EQUITY_L.csv`** | Gzip JSON / CSV download | Free / Automated | Full listing history |
+| **Daily Market Data** | Daily OHLCV, Turnover | **Upstox v2 API** (`/v2/historical-candle/day`) | REST API | Free (Broker Auth) | 10+ Years |
+| **Delivery Volume** | Deliverable Qty, Delivery % | **NSE Bhavcopy Full** (`sec_bhavdata_full_*.csv`) | Direct Daily Archive CSV | Free (Public Archive) | Daily since 2005 |
+| **Intraday Bars** | 1m, 5m, 15m Candles | **Upstox v2 API** (`/v2/historical-candle/{inst}/5minute`) | REST API | Free (Broker Auth) | Up to 1 year back |
+| **Corporate Actions** | Splits, Bonuses, Dividends | **NSE Corporate Actions API** (`/api/corporates-corporateActions`) | REST API / JSON | Free (Session Cookie) | Complete history |
+| **PIT Financials** | Balance Sheet, P&L, Cash Flow | **NSE XBRL Financials API** + **Yahoo Finance** + **Screener Ingest** | REST / Direct XBRL Parsing | Free / Public | 10 Years (Quarterly) |
+| **Filing Timestamps** | Exact Result Submission Timestamp | **NSE Corporate Announcements API** | REST API / JSON | Free (Session Cookie) | Minute-level accuracy |
+| **Shareholding & Pledge**| Promoter %, Pledge %, FII %, DII %| **NSE Shareholding API** (`/api/corporate-share-holdings-master`) | REST API / JSON | Free (Quarterly) | 5+ Years |
+| **Upcoming Catalysts** | Next Board Meeting Date & Purpose | **NSE Board Meetings Calendar API** (`/api/corporates-board-meetings`) | REST API / JSON | Free (Mandated LODR) | Real-time Forward Notice |
+| **Regulatory Filings** | Order Wins, Capex, Resignations | **NSE Regulatory Announcements (SEBI LODR Feed)** | Event-Driven NLP / Regex | Free (Exchange feed) | Real-time |
+| **Macro Regime** | India VIX, Crude, USD/INR, Nifty | **Yahoo Finance (`^INDIAVIX`, `BZ=F`, `INR=X`)** | REST API / yfinance | Free | 15+ Years |
+
+---
+
+## 3. Strict Policy: Exchange Announcements Only (No Generic Media News)
+
+To prevent sentiment noise, lagging articles, and post-hoc hallucinations:
+1. **EXCLUDED:** Generic financial media articles (Moneycontrol, Economic Times, Twitter/X, broker blogs).
+2. **INCLUDED:** Official regulatory filings submitted under **SEBI (LODR) Regulations** on NSE/BSE repositories.
+
+---
+
+## 4. Smart Multi-Tier Update Cadence (When Each Data Item Updates)
+
+```
+ ┌────────────────────────────────────────────────────────────────────────────────┐
+ │ TIER 1: LIVE INTRADAY STREAM (Market Hours 09:15 - 15:30 IST / Every 1-5 Mins) │
+ │ • Upstox Live Price Quotes (LTP, Day Change %, Circuit Bands)                  │
+ │ • Real-Time Breaking Regulatory Announcements Stream (SEBI LODR Filings)       │
+ └───────────────────────────────────────┬────────────────────────────────────────┘
+                                         │
+ ┌───────────────────────────────────────▼────────────────────────────────────────┐
+ │ TIER 2: POST-MARKET EOD BATCH (Daily at 16:30 - 18:00 IST)                     │
+ │ • Daily OHLCV Candle Close & NSE Bhavcopy Delivery Volume / Delivery %         │
+ │ • Macro Close (India VIX, USD/INR, Brent Crude, Sector Indices)                │
+ │ • Recompute Technical Features (50/200 DMA, Wilder RSI-14, 14D ATR, 52W High)  │
+ └───────────────────────────────────────┬────────────────────────────────────────┘
+                                         │
+ ┌───────────────────────────────────────▼────────────────────────────────────────┐
+ │ TIER 3: FORWARD CATALYST SCAN (Daily Morning at 08:30 IST)                     │
+ │ • Poll NSE Board Meetings Calendar (SEBI LODR Reg 29 Advance Disclosures)      │
+ │ • Update `next_announcement_date`, `event_purpose` (e.g. Q2 Results, Dividend) │
+ │ • Flag stocks with "EARNINGS IMMINENT (<7 Days)" for heightened volatility     │
+ └───────────────────────────────────────┬────────────────────────────────────────┘
+                                         │
+ ┌───────────────────────────────────────▼────────────────────────────────────────┐
+ │ TIER 4: QUARTERLY / EVENT-DRIVEN EARNINGS CYCLE (Triggered on New Filing)      │
+ │ • Ingest New Quarterly Income Statement, Balance Sheet, Cash Flow Statement    │
+ │ • Ingest Updated Shareholding Pattern (Promoter stake & Pledge change)         │
+ │ • Recompute Institutional ROCE, YoY/QoQ Growth, Cash Conversion & Moat Score   │
+ └────────────────────────────────────────────────────────────────────────────────┘
+```
+
+---
+
+## 5. Regulatory Announcement Materiality & Time-Decay Modeling
+
+Announcements are scored using a deterministic formula and decayed mathematically:
+
+$$S(t) = S_{\text{raw}} \times e^{-\lambda (t - t_{\text{pub}})}, \quad \text{where } \lambda = \frac{\ln(2)}{T_{1/2}}$$
+
+### Initial Raw Score Calculation:
+$$S_{\text{raw}} = W_{\text{category}} \times M_{\text{size}} \times D_{\text{direction}} \times C_{\text{market}}$$
+
+- **Category Weights ($W_{\text{category}}$):** Regulatory Approval/Ban ($100$), Capex Commissioning ($90$), Order Win ($85$), Auditor/Management Resignation ($80$), Credit Rating ($75$), Earnings Beat/Miss ($70$), Dividend/Bonus ($40$).
+- **Size Multiplier ($M_{\text{size}}$):** Ratio of Announced ₹ Value to TTM Revenue ($\ge 50\% \rightarrow 2.0\times$, $20-50\% \rightarrow 1.5\times$, $5-20\% \rightarrow 1.0\times$, $<5\% \rightarrow 0.5\times$).
+- **Market Confirmation ($C_{\text{market}}$):** Stock $+2\%$ surge on $>2.0\times$ ADV volume confirms institutional buying ($1.3\times$).
+
+### Dual-Track Half-Life & Lifecycle States:
+1. **Track A: Tactical Events ($T_{1/2} = 48\text{ Hours}$):**
+   - Earnings surprises, management changes, broker target revisions.
+   - Decays within $7\text{ days}$ $\rightarrow$ transitions to `ABSORBED_INTO_PRICE`.
+2. **Track B: Structural Catalysts ($T_{1/2} = 90\text{ Days}$):**
+   - Major order wins, factory/capex commissioning, debt-free restructuring.
+   - Active for 2 quarters $\rightarrow$ transitions to `ABSORBED_INTO_FINANCIALS` once reported in quarterly P&L.
+3. **Archival:** Records are never deleted (full provenance retained), but live filters exclude items where `status == 'HISTORICAL_ARCHIVE'`.
+
+---
+
+## 6. Forward Catalyst Engine (SEBI LODR Calendar Integration)
+
+Under **SEBI LODR Regulation 29**, listed companies must provide advance notice of Board Meetings (5 days for results, 2 days for dividends/splits).
+
+### Tracked Forward Fields per Stock:
+```text
+next_board_meeting_date:    2026-10-28
+days_until_announcement:    12 Days
+expected_event_type:        Q2_FINANCIAL_RESULTS_AND_INTERIM_DIVIDEND
+event_urgency_status:       SCHEDULED (Monitored)
+insider_blackout_active:    TRUE (Trading window closed)
+```
+
+---
+
+## 7. Database Schema Blueprint (Bitemporal & Normalized)
+
+### Module 1: Master & Corporate Identity
+- **`securities`**: `security_id`, `isin` (Unique), `nse_symbol`, `bse_code`, `company_name`, `legal_name`, `sector_id`, `industry`, `listing_date`, `delisting_date`, `status`, `face_value`, `lot_size`, `tick_size`.
+- **`corporate_identity_history`**: Tracks symbol renames, merges, demergers.
+
+### Module 2: Market & Intraday Data
+- **`daily_prices`**: `security_id`, `trading_date`, `raw_open`, `raw_high`, `raw_low`, `raw_close`, `adj_close`, `volume`, `deliverable_volume`, `delivery_percentage`, `turnover`, `vwap`, `source`, `ingested_at`.
+- **`intraday_bars`**: `security_id`, `timestamp`, `interval` (`1m`, `5m`, `15m`), `open`, `high`, `low`, `close`, `volume`, `vwap`, `turnover`.
+- **`corporate_actions`**: `action_id`, `security_id`, `action_type` (`SPLIT`, `BONUS`, `RIGHTS`, `DIVIDEND`), `announcement_date`, `ex_date`, `record_date`, `old_shares`, `new_shares`, `price_factor`, `share_factor`, `dividend_amount`.
+
+### Module 3: Normalized PIT Financials
+- **`income_statements`**: `statement_id`, `security_id`, `period_type` (`QUARTERLY`, `ANNUAL`), `period_end_date`, `publication_timestamp`, `system_rec_start`, `system_rec_end`, `revenue`, `operating_expenses`, `ebitda`, `ebit`, `pbt`, `tax`, `pat`, `eps`, `source_document_id`, `is_restatement`.
+- **`balance_sheets`**: `statement_id`, `security_id`, `period_end_date`, `publication_timestamp`, `cash_and_equivalents`, `trade_receivables`, `inventory`, `total_current_assets`, `total_assets`, `short_term_debt`, `long_term_debt`, `trade_payables`, `total_current_liabilities`, `total_liabilities`, `net_worth`, `total_equity`.
+- **`cash_flows`**: `statement_id`, `security_id`, `period_end_date`, `publication_timestamp`, `operating_cash_flow` (CFO), `capex`, `investing_cash_flow` (CFI), `financing_cash_flow` (CFF), `free_cash_flow` (FCF = CFO - CapEx).
+- **`share_capital`**: `security_id`, `period_end_date`, `publication_timestamp`, `total_shares_outstanding`, `promoter_shares`, `institutional_shares`, `public_shares`, `dilution_1y_pct`, `dilution_5y_pct`.
+
+### Module 4: Multibagger Business Runway & Catalysts
+- **`capacity_expansions`**: `capacity_id`, `security_id`, `business_segment`, `current_capacity`, `planned_capacity`, `capacity_unit`, `utilization_pct`, `announced_capex_cr`, `spent_capex_cr`, `expected_commissioning_date`, `publication_timestamp`, `source_url`.
+- **`order_books`**: `order_id`, `security_id`, `announcement_timestamp`, `customer_name`, `order_value_cr`, `order_type`, `execution_timeline_months`, `cumulative_order_book_cr`, `book_to_bill_ratio`.
+- **`management_guidance`**: `guidance_id`, `security_id`, `period_targeted`, `publication_timestamp`, `metric_name` (`REVENUE`, `MARGIN`, `CAPEX`), `guidance_min`, `guidance_max`, `actual_achieved`, `guidance_status` (`BEAT`, `MET`, `MISSED`).
+
+### Module 5: Governance, Regulatory Announcements & Macro
+- **`shareholding_records`**: `record_id`, `security_id`, `quarter_end_date`, `publication_timestamp`, `promoter_pct`, `promoter_pledge_pct`, `fii_pct`, `dii_pct`, `public_pct`, `governance_risk_flag`.
+- **`corporate_announcements`**: `announcement_id`, `security_id`, `publication_timestamp`, `event_type` (`ORDER_WIN`, `CAPEX`, `AUDITOR_RESIGNATION`, `MANAGEMENT_CHANGE`, `RESULT`), `headline`, `material_value_cr`, `materiality_score`, `decayed_score`, `source_url`, `status` (`NEW_ACTIVE`, `DECAYING`, `ABSORBED_INTO_PRICE`, `ABSORBED_INTO_FINANCIALS`, `HISTORICAL_ARCHIVE`).
+- **`macro_series`**: `indicator` (`INDIA_VIX`, `NIFTY_50`, `USD_INR`, `BRENT_CRUDE`, `INDIA_10Y_YIELD`, `REPO_RATE`, `CPI_INFLATION`), `observation_date`, `publication_timestamp`, `value`, `source`.
+
+---
+
+## 8. Implementation Phasing Strategy
+
+### Scope: High-Conviction Nifty 500 Universe (10-Year Backfill)
+
+```
+Phase 1: Foundation (Master + Price + PIT Financials + Actions)
+  ├── 1.1 Deploy updated database schema & SQLite/PostgreSQL migrations
+  ├── 1.2 Upstox/NSE Bhavcopy Daily & Intraday Ingestion Pipeline
+  ├── 1.3 NSE XBRL & Yahoo Finance Quarterly/Annual PIT Ingestion Pipeline
+  └── 1.4 PriceAdjuster point-in-time verification test suite
+
+Phase 2: Business Runway & Multibagger Accelerators
+  ├── 2.1 Capacity, Capex Expansion & Utilization Ingestion
+  ├── 2.2 Order Book & Book-to-Bill Tracking Pipeline
+  ├── 2.3 Share Capital Dilution & Quarterly Shareholding Pattern Ingest
+  └── 2.4 Earnings Acceleration Engine (YoY/QoQ EPS & ROCE Trajectories)
+
+Phase 3: Regulatory Filings, Decay Engine & Forward Catalyst Calendar
+  ├── 3.1 NSE Regulatory Announcements (SEBI LODR) Ingestion & Scoring Engine
+  ├── 3.2 Time-Decay Half-Life & State Machine Lifecycle Worker
+  ├── 3.3 NSE Board Meetings Forward Calendar Tracker (Next Announcement Days)
+  └── 3.4 Macro Economic Feeds (India VIX, Brent, Yields, Repo Rate)
+
+Phase 4: Feature Store & AI Decision Integration
+  ├── 4.1 Update Point-in-Time Feature Engine to query normalized tables
+  ├── 4.2 Connect M6, Swing, Intraday Engines to PIT Feature Store
+  └── 4.3 Update Web Hub & Dashboard with real verifiable metrics
+```
+
+---
+
+## 9. Verification & Data Quality Framework
+
+Every ingested dataset is subjected to the Data Quality Gate:
+1. **Freshness:** Verified against current exchange timestamp.
+2. **Double-Entry Balance Sheet Validation:** $\text{Assets} == \text{Liabilities} + \text{Equity} \ (\pm 1\%)$.
+3. **Cash Flow Reconciliation:** $\text{Closing Cash} == \text{Opening Cash} + \text{CFO} + \text{CFI} + \text{CFF}$.
+4. **Candle Integrity:** $\text{High} \ge \max(\text{Open}, \text{Close}) \ge \min(\text{Open}, \text{Close}) \ge \text{Low}$.
+5. **No Lookahead Guarantee:** In tests, any query as of Date $T$ asserting that records with `publication_timestamp > T` are excluded.
+
+---
+
+## User Review Required
+
+> [!IMPORTANT]
+> **Approval to Proceed:** Please review the updated plan. Upon your confirmation, we will begin executing **Phase 1: Foundation (Database Schemas, Ingestion Connectors, and PIT Backfill Pipelines)**.

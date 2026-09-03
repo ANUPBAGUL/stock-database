@@ -1,0 +1,1334 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Stock Watchlist & Comprehensive Parameter Hub</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-base: #080c14;
+            --bg-surface: #0f1624;
+            --bg-card: #151f32;
+            --bg-card-hover: #1c2a44;
+            --border-color: rgba(255, 255, 255, 0.08);
+            --border-focus: rgba(0, 240, 255, 0.4);
+            --accent-emerald: #00ff9d;
+            --accent-cyan: #00f0ff;
+            --accent-purple: #a855f7;
+            --accent-amber: #ffb700;
+            --accent-rose: #ff0055;
+            --text-main: #f8fafc;
+            --text-muted: #94a3b8;
+            --text-dim: #64748b;
+            --font-sans: 'Inter', sans-serif;
+            --font-mono: 'JetBrains Mono', monospace;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            background-color: var(--bg-base);
+            color: var(--text-main);
+            font-family: var(--font-sans);
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            overflow-x: hidden;
+        }
+
+        /* Top Header */
+        header {
+            background: rgba(15, 22, 36, 0.90);
+            backdrop-filter: blur(12px);
+            border-bottom: 1px solid var(--border-color);
+            padding: 1rem 2rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            position: sticky;
+            top: 0;
+            z-index: 100;
+        }
+
+        .brand-box {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+        }
+
+        .brand-icon {
+            font-size: 1.8rem;
+            background: linear-gradient(135deg, var(--accent-cyan), var(--accent-purple));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .brand-title {
+            font-size: 1.25rem;
+            font-weight: 800;
+            letter-spacing: -0.02em;
+            color: #fff;
+        }
+
+        .brand-sub {
+            font-size: 0.75rem;
+            color: var(--text-muted);
+            margin-top: 2px;
+        }
+
+        .header-badges {
+            display: flex;
+            gap: 0.75rem;
+            align-items: center;
+        }
+
+        .badge-tag {
+            font-size: 0.72rem;
+            font-family: var(--font-mono);
+            font-weight: 700;
+            padding: 0.25rem 0.65rem;
+            border-radius: 6px;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.35rem;
+            cursor: pointer;
+        }
+
+        .badge-emerald { background: rgba(0, 255, 157, 0.12); color: var(--accent-emerald); border: 1px solid rgba(0, 255, 157, 0.3); }
+        .badge-cyan { background: rgba(0, 240, 255, 0.12); color: var(--accent-cyan); border: 1px solid rgba(0, 240, 255, 0.3); }
+        .badge-purple { background: rgba(168, 85, 247, 0.12); color: var(--accent-purple); border: 1px solid rgba(168, 85, 247, 0.3); }
+        .badge-amber { background: rgba(255, 183, 0, 0.12); color: var(--accent-amber); border: 1px solid rgba(255, 183, 0, 0.3); }
+        .badge-rose { background: rgba(255, 0, 85, 0.12); color: var(--accent-rose); border: 1px solid rgba(255, 0, 85, 0.3); }
+
+        /* Main Tabs Bar */
+        .tabs-header {
+            background: var(--bg-surface);
+            border-bottom: 1px solid var(--border-color);
+            padding: 0 2rem;
+            display: flex;
+            gap: 1rem;
+        }
+
+        .tab-btn {
+            background: none;
+            border: none;
+            border-bottom: 3px solid transparent;
+            color: var(--text-muted);
+            font-family: var(--font-sans);
+            font-size: 0.95rem;
+            font-weight: 700;
+            padding: 1rem 1.25rem;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            display: flex;
+            align-items: center;
+            gap: 0.6rem;
+        }
+
+        .tab-btn:hover {
+            color: #fff;
+        }
+
+        .tab-btn.active {
+            color: var(--accent-cyan);
+            border-bottom-color: var(--accent-cyan);
+        }
+
+        /* Workspace Container */
+        .workspace {
+            flex: 1;
+            padding: 1.75rem 2rem;
+            max-width: 1700px;
+            width: 100%;
+            margin: 0 auto;
+        }
+
+        .tab-content {
+            display: none;
+        }
+
+        .tab-content.active {
+            display: block;
+            animation: fadeIn 0.25s ease-in-out;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(6px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        /* Card Panels */
+        .panel {
+            background: var(--bg-surface);
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            padding: 1.5rem;
+            margin-bottom: 1.5rem;
+        }
+
+        .panel-title {
+            font-size: 1.1rem;
+            font-weight: 800;
+            color: #fff;
+            margin-bottom: 0.35rem;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .panel-desc {
+            font-size: 0.82rem;
+            color: var(--text-muted);
+            margin-bottom: 1.25rem;
+        }
+
+        /* Form & Textarea */
+        textarea.batch-input {
+            width: 100%;
+            height: 140px;
+            background: rgba(0, 0, 0, 0.4);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            color: #fff;
+            font-family: var(--font-mono);
+            font-size: 0.95rem;
+            padding: 1rem;
+            resize: vertical;
+            transition: border-color 0.2s;
+        }
+
+        textarea.batch-input:focus {
+            outline: none;
+            border-color: var(--accent-cyan);
+            box-shadow: 0 0 16px rgba(0, 240, 255, 0.15);
+        }
+
+        .btn-row {
+            display: flex;
+            gap: 0.75rem;
+            align-items: center;
+            margin-top: 1rem;
+            flex-wrap: wrap;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, #00f0ff, #7928ca);
+            color: #fff;
+            font-weight: 800;
+            font-size: 0.90rem;
+            border: none;
+            border-radius: 8px;
+            padding: 0.75rem 1.75rem;
+            cursor: pointer;
+            box-shadow: 0 4px 20px rgba(0, 240, 255, 0.25);
+            transition: transform 0.15s, opacity 0.15s;
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-1px);
+            opacity: 0.95;
+        }
+
+        .btn-secondary {
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid var(--border-color);
+            color: var(--text-main);
+            font-size: 0.82rem;
+            font-weight: 600;
+            border-radius: 8px;
+            padding: 0.65rem 1.1rem;
+            cursor: pointer;
+            transition: background 0.15s;
+        }
+
+        .btn-secondary:hover {
+            background: rgba(255, 255, 255, 0.1);
+        }
+
+        /* KPI Strip */
+        .kpi-container {
+            display: grid;
+            grid-template-columns: repeat(5, 1fr);
+            gap: 1rem;
+            margin-bottom: 1.5rem;
+        }
+
+        .kpi-card {
+            background: var(--bg-surface);
+            border: 1px solid var(--border-color);
+            border-radius: 10px;
+            padding: 1.1rem;
+        }
+
+        .kpi-label {
+            font-size: 0.72rem;
+            color: var(--text-muted);
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+
+        .kpi-val {
+            font-size: 1.45rem;
+            font-weight: 900;
+            font-family: var(--font-mono);
+            color: #fff;
+            margin: 0.35rem 0 0.2rem 0;
+        }
+
+        .kpi-sub {
+            font-size: 0.70rem;
+            color: var(--text-dim);
+        }
+
+        /* Filter Controls */
+        .filter-bar {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 1rem;
+            margin-bottom: 1.25rem;
+            flex-wrap: wrap;
+        }
+
+        .filter-pills {
+            display: flex;
+            gap: 0.5rem;
+        }
+
+        .pill-btn {
+            background: rgba(255, 255, 255, 0.04);
+            border: 1px solid var(--border-color);
+            color: var(--text-muted);
+            font-size: 0.78rem;
+            font-weight: 700;
+            padding: 0.45rem 0.9rem;
+            border-radius: 20px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .pill-btn.active, .pill-btn:hover {
+            background: rgba(0, 240, 255, 0.12);
+            border-color: var(--accent-cyan);
+            color: var(--accent-cyan);
+        }
+
+        .search-input {
+            background: rgba(0, 0, 0, 0.4);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            color: #fff;
+            font-family: var(--font-sans);
+            font-size: 0.85rem;
+            padding: 0.5rem 1rem;
+            width: 260px;
+        }
+
+        .search-input:focus {
+            outline: none;
+            border-color: var(--accent-cyan);
+        }
+
+        /* Tables */
+        .table-responsive {
+            overflow-x: auto;
+            border-radius: 8px;
+            border: 1px solid var(--border-color);
+        }
+
+        table.custom-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.82rem;
+            text-align: left;
+        }
+
+        table.custom-table th {
+            background: rgba(21, 31, 50, 0.9);
+            color: var(--text-muted);
+            font-weight: 700;
+            padding: 0.85rem 1rem;
+            border-bottom: 1px solid var(--border-color);
+            white-space: nowrap;
+        }
+
+        table.custom-table td {
+            padding: 0.85rem 1rem;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+            vertical-align: middle;
+        }
+
+        table.custom-table tbody tr {
+            transition: background 0.15s;
+        }
+
+        table.custom-table tbody tr:hover {
+            background: rgba(0, 240, 255, 0.03);
+        }
+
+        /* 52W Bar */
+        .range-bar-box {
+            width: 100px;
+            height: 6px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 3px;
+            position: relative;
+            margin-top: 4px;
+        }
+
+        .range-bar-fill {
+            height: 100%;
+            background: linear-gradient(90deg, var(--accent-amber), var(--accent-emerald));
+            border-radius: 3px;
+        }
+
+        /* Stock Cards Grid in Tab 1 */
+        .cards-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+            gap: 1.25rem;
+            margin-top: 1.25rem;
+        }
+
+        .stock-card {
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
+            border-radius: 10px;
+            padding: 1.25rem;
+            transition: transform 0.15s, border-color 0.15s;
+        }
+
+        .stock-card:hover {
+            transform: translateY(-2px);
+            border-color: rgba(0, 240, 255, 0.3);
+        }
+
+        .card-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            margin-bottom: 0.75rem;
+        }
+
+        .card-symbol {
+            font-size: 1.15rem;
+            font-weight: 800;
+            color: #fff;
+            cursor: pointer;
+        }
+
+        .card-symbol:hover {
+            color: var(--accent-cyan);
+        }
+
+        .card-name {
+            font-size: 0.75rem;
+            color: var(--text-muted);
+        }
+
+        .card-price {
+            font-size: 1.2rem;
+            font-weight: 800;
+            font-family: var(--font-mono);
+            color: #fff;
+            text-align: right;
+        }
+
+        .card-chg {
+            font-size: 0.75rem;
+            font-weight: 700;
+            font-family: var(--font-mono);
+        }
+
+        .card-metrics-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 0.6rem;
+            font-size: 0.78rem;
+            background: rgba(0, 0, 0, 0.25);
+            border-radius: 6px;
+            padding: 0.75rem;
+            margin-bottom: 0.85rem;
+        }
+
+        /* Modal Styles */
+        .modal-backdrop {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            background: rgba(0, 0, 0, 0.8);
+            backdrop-filter: blur(8px);
+            z-index: 1000;
+            justify-content: center;
+            align-items: center;
+            padding: 2rem;
+        }
+
+        .modal-box {
+            background: #0d1420;
+            border: 1px solid var(--border-color);
+            border-radius: 14px;
+            width: 100%;
+            max-width: 1000px;
+            max-height: 90vh;
+            overflow-y: auto;
+            position: relative;
+            padding: 2rem;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.9);
+        }
+
+        .modal-close {
+            position: absolute;
+            top: 1.25rem;
+            right: 1.25rem;
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid var(--border-color);
+            color: #fff;
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            font-weight: 800;
+            cursor: pointer;
+        }
+
+        .input-control {
+            width: 100%;
+            background: rgba(0,0,0,0.4);
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            padding: 0.65rem 0.9rem;
+            color: #fff;
+            font-family: var(--font-mono);
+            font-size: 0.85rem;
+            margin-top: 0.35rem;
+            margin-bottom: 0.85rem;
+        }
+        .input-control:focus {
+            outline: none;
+            border-color: var(--accent-cyan);
+        }
+    </style>
+</head>
+<body>
+
+    <!-- Header -->
+    <header>
+        <div class="brand-box">
+            <div class="brand-icon">🏛️</div>
+            <div>
+                <div class="brand-title">STOCK WATCHLIST & INFORMATION HUB</div>
+                <div class="brand-sub">Pure Upstox v2 Market Feeds & Automated 5-Minute Continuous Surveillance</div>
+            </div>
+        </div>
+        <div class="header-badges">
+            <span class="badge-tag badge-purple" id="upstoxAuthBadge" onclick="openUpstoxAuthModal()">🔐 UPSTOX: CHECKING...</span>
+            <span class="badge-tag badge-emerald" id="autoSyncBadge">🔄 AUTO-SYNC: <span id="countdownTimer">05:00</span></span>
+            <button class="btn-secondary" style="padding: 0.30rem 0.75rem; font-size: 0.72rem; border-color: var(--accent-cyan); color: var(--accent-cyan); font-weight: 700;" onclick="triggerManualSync()">⚡ Sync Now</button>
+            <span id="lastSyncLabel" style="font-size: 0.72rem; color: var(--text-dim); font-family: var(--font-mono);">Last: --:--:--</span>
+        </div>
+    </header>
+
+    <!-- Main Navigation Tabs -->
+    <div class="tabs-header">
+        <button class="tab-btn active" onclick="switchMainTab('tab-parser')">📝 1. Add Stocks to Watchlist (Batch Text Parser)</button>
+        <button class="tab-btn" onclick="switchMainTab('tab-explorer')">📋 2. Watchlist & Full Parameter Explorer</button>
+    </div>
+
+    <!-- Main Workspace -->
+    <div class="workspace">
+
+        <!-- TAB 1: Batch Text Parser & Add Stocks -->
+        <div id="tab-parser" class="tab-content active">
+            <div class="panel">
+                <div class="panel-title">
+                    <span>⚡ Paste Stock Names or Symbols</span>
+                    <span class="badge-tag badge-cyan">Upstox v2 Real-Time Ingestion</span>
+                </div>
+                <div class="panel-desc">
+                    Enter or paste stock names in any format (e.g. <code>DIXON, Trent, POLYCAB, ASTRAL, Persistent, Tata Motors, Reliance</code>).
+                    The intelligent parser extracts NSE symbols, triggers real-time price & PIT financial ingestion via Upstox, and calculates the full parameter suite.
+                </div>
+
+                <textarea id="batchTextInput" class="batch-input" placeholder="Paste stock names or symbols here (e.g. DIXON, TRENT, POLYCAB, ASTRAL, PERSISTENT, TITAN, BEL, HAL, KAYNES, CDSL)..."></textarea>
+
+                <div class="btn-row">
+                    <button class="btn-primary" onclick="runBatchParserAndIngest()">⚡ Parse & Ingest via Upstox</button>
+                    <button class="btn-secondary" onclick="loadSampleText('growth')">📂 Sample: Top 10 Growth Stocks</button>
+                    <button class="btn-secondary" onclick="loadSampleText('nifty50')">📂 Sample: Nifty 50 Bluechips</button>
+                    <button class="btn-secondary" onclick="clearBatchInput()">🗑️ Clear</button>
+                </div>
+            </div>
+
+            <!-- Ingestion Live Progress & Output Box -->
+            <div id="ingestionOutputPanel" style="display: none;">
+                <div class="panel">
+                    <div class="panel-title">
+                        <span id="ingestSummaryTitle">📊 Ingestion Results Summary</span>
+                        <span id="ingestBadge" class="badge-tag badge-emerald">Ready</span>
+                    </div>
+                    <div id="ingestSummaryDesc" class="panel-desc"></div>
+                    <div id="cardsGridContainer" class="cards-grid"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- TAB 2: Watchlist & Full Parameter Explorer -->
+        <div id="tab-explorer" class="tab-content">
+            <!-- Top Summary KPI Strip -->
+            <div class="kpi-container">
+                <div class="kpi-card">
+                    <div class="kpi-label">Watchlist Equities</div>
+                    <div class="kpi-val" id="kpiCount">-</div>
+                    <div class="kpi-sub">Active Securities Monitored</div>
+                </div>
+                <div class="kpi-card">
+                    <div class="kpi-label">Average ROCE</div>
+                    <div class="kpi-val" style="color:var(--accent-emerald);" id="kpiAvgROCE">-</div>
+                    <div class="kpi-sub">Capital Efficiency Metric</div>
+                </div>
+                <div class="kpi-card">
+                    <div class="kpi-label">Top M6 Pick</div>
+                    <div class="kpi-val" style="color:var(--accent-purple);" id="kpiTopM6">-</div>
+                    <div class="kpi-sub">Highest Conviction Score</div>
+                </div>
+                <div class="kpi-card">
+                    <div class="kpi-label">Median Trailing P/E</div>
+                    <div class="kpi-val" style="color:var(--accent-amber);" id="kpiMedianPE">-</div>
+                    <div class="kpi-sub">Valuation Multiple Band</div>
+                </div>
+                <div class="kpi-card">
+                    <div class="kpi-label">Total Trade Capacity</div>
+                    <div class="kpi-val" style="color:var(--accent-cyan);" id="kpiTotalCap">-</div>
+                    <div class="kpi-sub">Under 5% 20D ADV Limits</div>
+                </div>
+            </div>
+
+            <!-- Filter & Search Controls -->
+            <div class="filter-bar">
+                <div class="filter-pills">
+                    <button class="pill-btn active" onclick="filterHorizon('ALL')">All Stocks</button>
+                    <button class="pill-btn" onclick="filterHorizon('LONGTERM')">🧬 Long-Term Multibaggers (M6 ≥ 75)</button>
+                    <button class="pill-btn" onclick="filterHorizon('SWING')">📈 Swing Setups (Score ≥ 60)</button>
+                    <button class="pill-btn" onclick="filterHorizon('INTRADAY')">⚡ Intraday Breakouts</button>
+                </div>
+                <div style="display: flex; gap: 0.75rem; align-items: center;">
+                    <input type="text" id="tableSearchInput" class="search-input" placeholder="🔍 Search symbol or company..." onkeyup="searchWatchlistTable()">
+                    <button class="btn-secondary" onclick="loadExplorerData(true)">🔄 Refresh Table</button>
+                </div>
+            </div>
+
+            <!-- Master Parameter Table -->
+            <div class="table-responsive">
+                <table class="custom-table" id="masterWatchlistTable">
+                    <thead>
+                        <tr>
+                            <th>Stock</th>
+                            <th>Current Price</th>
+                            <th>Day Chg %</th>
+                            <th>52-Week Range</th>
+                            <th>50-DMA Dist</th>
+                            <th>M6 Long-Term</th>
+                            <th>Swing Setup</th>
+                            <th>Next Catalyst (SEBI)</th>
+                            <th>ROCE %</th>
+                            <th>Trailing P/E</th>
+                            <th>Promoter (Pledge)</th>
+                            <th>Max Sizing (5% ADV)</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="watchlistTableBody">
+                        <tr><td colspan="13" style="text-align: center; color: var(--text-dim); padding: 2rem;">Loading watchlist parameters from Upstox...</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+    </div>
+
+    <!-- 360° Stock Parameter Modal -->
+    <div id="stockModal" class="modal-backdrop">
+        <div class="modal-box">
+            <button class="modal-close" onclick="closeStockModal()">✕</button>
+            <div id="modalBody"></div>
+        </div>
+    </div>
+
+    <!-- Upstox Authenticator Modal -->
+    <div id="upstoxAuthModal" class="modal-backdrop">
+        <div class="modal-box" style="max-width: 650px;">
+            <button class="modal-close" onclick="closeUpstoxAuthModal()">✕</button>
+            
+            <div style="display: flex; align-items: center; gap: 0.75rem; margin-bottom: 1.25rem;">
+                <div style="font-size: 1.8rem;">🔐</div>
+                <div>
+                    <h2 style="font-size: 1.3rem; font-weight: 800; color: #fff;">Upstox API Authenticator</h2>
+                    <div style="font-size: 0.78rem; color: var(--text-muted);">Manage OAuth2 Session, Access Token & Broker Connection</div>
+                </div>
+            </div>
+
+            <!-- Current Session Status -->
+            <div id="authStatusBox" style="background: rgba(0, 240, 255, 0.05); border: 1px solid rgba(0, 240, 255, 0.25); border-radius: 8px; padding: 1.1rem; margin-bottom: 1.25rem;">
+                <div style="font-size: 0.85rem; color: var(--text-muted);">Loading Upstox profile...</div>
+            </div>
+
+            <!-- Method 1: 1-Click Login Dialog -->
+            <div style="background: rgba(0, 0, 0, 0.25); border: 1px solid var(--border-color); border-radius: 8px; padding: 1.1rem; margin-bottom: 1.25rem;">
+                <div style="font-weight: 700; color: var(--accent-cyan); font-size: 0.90rem; margin-bottom: 0.35rem;">⚡ 1-Click Upstox Login (OAuth2)</div>
+                <div style="font-size: 0.78rem; color: var(--text-muted); margin-bottom: 0.85rem;">Opens official Upstox authorization dialog. Automatically saves access token.</div>
+                <button class="btn-primary" style="width: 100%;" onclick="openUpstoxOAuthDialog()">🔗 Connect / Login via Upstox</button>
+            </div>
+
+            <!-- Method 2: Paste Authorization Code -->
+            <div style="background: rgba(0, 0, 0, 0.25); border: 1px solid var(--border-color); border-radius: 8px; padding: 1.1rem; margin-bottom: 1.25rem;">
+                <div style="font-weight: 700; color: var(--accent-purple); font-size: 0.90rem; margin-bottom: 0.35rem;">🔑 Exchange Authorization Code</div>
+                <div style="font-size: 0.78rem; color: var(--text-muted);">If redirected with <code>?code=...</code>, paste the code here:</div>
+                <input type="text" id="authCodeInput" class="input-control" placeholder="Paste Upstox authorization code here...">
+                <button class="btn-secondary" style="width: 100%; border-color: var(--accent-purple); color: var(--accent-purple);" onclick="exchangeAuthCode()">⚡ Exchange Code for Access Token</button>
+            </div>
+
+            <!-- Method 3: Paste Direct Access Token -->
+            <div style="background: rgba(0, 0, 0, 0.25); border: 1px solid var(--border-color); border-radius: 8px; padding: 1.1rem;">
+                <div style="font-weight: 700; color: var(--accent-emerald); font-size: 0.90rem; margin-bottom: 0.35rem;">📝 Paste Direct Access Token (JWT)</div>
+                <div style="font-size: 0.78rem; color: var(--text-muted);">If you already have a token generated today:</div>
+                <input type="text" id="manualTokenInput" class="input-control" placeholder="eyJ0eXAiOiJKV1QiLCJrZXlfaWQi...">
+                <button class="btn-secondary" style="width: 100%; border-color: var(--accent-emerald); color: var(--accent-emerald);" onclick="saveManualToken()">✔ Verify & Save Access Token</button>
+            </div>
+
+        </div>
+    </div>
+
+    <script>
+        let allWatchlistData = [];
+        let currentHorizonFilter = 'ALL';
+        let countdownSeconds = 300; // 5 minutes
+
+        function switchMainTab(tabId) {
+            document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
+            document.querySelectorAll('.tab-btn').forEach(el => el.classList.remove('active'));
+
+            document.getElementById(tabId).classList.add('active');
+            const btn = Array.from(document.querySelectorAll('.tab-btn')).find(b => b.getAttribute('onclick').includes(tabId));
+            if (btn) btn.classList.add('active');
+
+            if (tabId === 'tab-explorer') {
+                loadExplorerData();
+            }
+        }
+
+        function loadSampleText(type) {
+            const input = document.getElementById('batchTextInput');
+            if (type === 'growth') {
+                input.value = "DIXON, Trent, POLYCAB, ASTRAL, Persistent, KAYNES, CDSL, BEL, HAL, Tata Elxsi";
+            } else if (type === 'nifty50') {
+                input.value = "RELIANCE, TCS, INFY, HDFCBANK, ICICIBANK, SBIN, TATAMOTORS, LT, ITC, BHARTIARTL, BAJFINANCE, TITAN, ASIANPAINT";
+            }
+        }
+
+        function clearBatchInput() {
+            document.getElementById('batchTextInput').value = "";
+        }
+
+        async function runBatchParserAndIngest() {
+            const text = document.getElementById('batchTextInput').value.trim();
+            if (!text) {
+                alert("Please enter stock names or symbols.");
+                return;
+            }
+
+            const outPanel = document.getElementById('ingestionOutputPanel');
+            const title = document.getElementById('ingestSummaryTitle');
+            const badge = document.getElementById('ingestBadge');
+            const desc = document.getElementById('ingestSummaryDesc');
+            const grid = document.getElementById('cardsGridContainer');
+
+            outPanel.style.display = 'block';
+            title.innerText = "⏳ Ingesting via Upstox v2 API...";
+            badge.innerText = "Processing";
+            badge.className = "badge-tag badge-amber";
+            desc.innerText = "Querying Upstox instruments, downloading OHLCV candles, computing Wilder RSI, ROCE, M6, and 9 Multibagger Questions...";
+            grid.innerHTML = "<div style='color: var(--accent-cyan); padding: 1rem;'>Contacting Upstox API...</div>";
+
+            try {
+                const resp = await fetch('/api/watchlist/parse-and-add', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ text: text })
+                });
+                const res = await resp.json();
+
+                if (!res.success) {
+                    title.innerText = "❌ Ingestion Error";
+                    badge.innerText = "Failed";
+                    badge.className = "badge-tag badge-rose";
+                    desc.innerText = res.error || "Failed to process stock text.";
+                    grid.innerHTML = "";
+                    return;
+                }
+
+                title.innerText = `✅ Upstox Ingestion Complete: ${res.successful_count} / ${res.total_parsed} Stocks Updated`;
+                badge.innerText = "Success";
+                badge.className = "badge-tag badge-emerald";
+                desc.innerText = `Parsed Symbols: ${res.parsed_symbols.join(', ')}. All parameters, M6 scores, and 9 Multibagger Questions are ready.`;
+
+                let cardsHtml = res.results.map(s => {
+                    const chgColor = s.day_change_pct >= 0 ? 'var(--accent-emerald)' : 'var(--accent-rose)';
+                    const chgSign = s.day_change_pct >= 0 ? '+' : '';
+                    const m6Color = s.m6_longterm_score >= 75 ? 'var(--accent-purple)' : 'var(--accent-cyan)';
+                    return `
+                        <div class="stock-card">
+                            <div class="card-header">
+                                <div>
+                                    <div class="card-symbol" onclick="openStockModalDetail('${s.symbol}')">${s.symbol} 🔍</div>
+                                    <div class="card-name">${s.company_name}</div>
+                                </div>
+                                <div>
+                                    <div class="card-price">₹${s.current_price.toLocaleString()}</div>
+                                    <div class="card-chg" style="color: ${chgColor}; text-align: right;">${chgSign}${s.day_change_pct}%</div>
+                                </div>
+                            </div>
+                            <div class="card-metrics-grid">
+                                <div>🧬 <strong>M6 Score:</strong> <span style="color:${m6Color}; font-weight:700;">${s.m6_longterm_score}/100</span></div>
+                                <div>📈 <strong>Swing Setup:</strong> <span style="color:var(--accent-cyan);">${s.swing_setup}</span></div>
+                                <div>⚡ <strong>ROCE:</strong> <span style="color:var(--accent-emerald); font-weight:700;">${s.roce_pct}%</span></div>
+                                <div>📊 <strong>P/E:</strong> <span style="color:var(--accent-amber);">${s.pe_ratio}x</span></div>
+                                <div>🎯 <strong>Target:</strong> <span style="color:var(--accent-emerald);">₹${s.swing_target || '-'}</span></div>
+                                <div>🛑 <strong>Stop Loss:</strong> <span style="color:var(--accent-rose);">₹${s.swing_stop_loss || '-'}</span></div>
+                            </div>
+                            <div style="font-size: 0.75rem; color: var(--text-dim); margin-bottom: 0.75rem;">
+                                <strong>Verdict:</strong> <span style="color:var(--accent-emerald); font-weight:700;">${s.primary_verdict}</span> | Sizing: ${s.sizing_guidance}
+                            </div>
+                            <button class="btn-secondary" style="width: 100%; font-size: 0.78rem;" onclick="openStockModalDetail('${s.symbol}')">🔍 Inspect 360° Profile & 9 Questions</button>
+                        </div>
+                    `;
+                }).join('');
+
+                grid.innerHTML = cardsHtml;
+                resetCountdown();
+            } catch (err) {
+                title.innerText = "❌ Network Error";
+                badge.innerText = "Error";
+                badge.className = "badge-tag badge-rose";
+                desc.innerText = err.message;
+                grid.innerHTML = "";
+            }
+        }
+
+        async function loadExplorerData(showStatus = false) {
+            try {
+                const resp = await fetch('/api/watchlist/all');
+                const res = await resp.json();
+                if (!res.success) return;
+
+                allWatchlistData = res.stocks || [];
+                renderKPIs(allWatchlistData);
+                renderWatchlistTable(allWatchlistData);
+
+                if (res.last_refresh && res.last_refresh.timestamp) {
+                    document.getElementById('lastSyncLabel').innerText = `Synced: ${res.last_refresh.timestamp.split(' ')[1] || res.last_refresh.timestamp}`;
+                }
+
+                if (res.upstox_auth) {
+                    renderUpstoxHeaderBadge(res.upstox_auth);
+                }
+            } catch (err) {
+                console.error("Error loading explorer data:", err);
+            }
+        }
+
+        async function triggerManualSync() {
+            const btn = document.querySelector('.header-badges button');
+            if (btn) btn.innerText = "⏳ Syncing...";
+            try {
+                const resp = await fetch('/api/watchlist/refresh-all');
+                const res = await resp.json();
+                if (res.success) {
+                    await loadExplorerData();
+                    resetCountdown();
+                }
+            } catch (e) {
+                console.error("Sync error:", e);
+            } finally {
+                if (btn) btn.innerText = "⚡ Sync Now";
+            }
+        }
+
+        function resetCountdown() {
+            countdownSeconds = 300;
+        }
+
+        // Live 5-minute countdown timer loop
+        setInterval(() => {
+            countdownSeconds--;
+            if (countdownSeconds <= 0) {
+                countdownSeconds = 300;
+                loadExplorerData();
+            }
+            const mins = Math.floor(countdownSeconds / 60).toString().padStart(2, '0');
+            const secs = (countdownSeconds % 60).toString().padStart(2, '0');
+            const timerEl = document.getElementById('countdownTimer');
+            if (timerEl) timerEl.innerText = `${mins}:${secs}`;
+        }, 1000);
+
+        function renderKPIs(stocks) {
+            document.getElementById('kpiCount').innerText = stocks.length;
+            if (stocks.length === 0) return;
+
+            const avgRoce = (stocks.reduce((acc, s) => acc + (s.roce_pct || 0), 0) / stocks.length).toFixed(1);
+            document.getElementById('kpiAvgROCE').innerText = `${avgRoce}%`;
+
+            const topM6 = [...stocks].sort((a, b) => b.m6_longterm_score - a.m6_longterm_score)[0];
+            document.getElementById('kpiTopM6').innerText = topM6 ? `${topM6.symbol} (${topM6.m6_longterm_score})` : '-';
+
+            const medianPe = (stocks.reduce((acc, s) => acc + (s.pe_ratio || 0), 0) / stocks.length).toFixed(1);
+            document.getElementById('kpiMedianPE').innerText = `${medianPe}x`;
+
+            const totalCap = stocks.reduce((acc, s) => acc + (s.liquidity.max_safe_position_size_cr || 0), 0).toFixed(1);
+            document.getElementById('kpiTotalCap').innerText = `₹${totalCap} Cr`;
+        }
+
+        function filterHorizon(horizon) {
+            currentHorizonFilter = horizon;
+            document.querySelectorAll('.pill-btn').forEach(el => el.classList.remove('active'));
+            const btn = Array.from(document.querySelectorAll('.pill-btn')).find(b => b.getAttribute('onclick').includes(horizon));
+            if (btn) btn.classList.add('active');
+
+            let filtered = allWatchlistData;
+            if (horizon === 'LONGTERM') {
+                filtered = allWatchlistData.filter(s => s.m6_longterm_score >= 75);
+            } else if (horizon === 'SWING') {
+                filtered = allWatchlistData.filter(s => s.swing_score >= 60);
+            } else if (horizon === 'INTRADAY') {
+                filtered = allWatchlistData.filter(s => s.intraday_score >= 70);
+            }
+            renderWatchlistTable(filtered);
+        }
+
+        function searchWatchlistTable() {
+            const q = document.getElementById('tableSearchInput').value.toLowerCase();
+            const filtered = allWatchlistData.filter(s => 
+                s.symbol.toLowerCase().includes(q) || s.company_name.toLowerCase().includes(q) || s.sector.toLowerCase().includes(q)
+            );
+            renderWatchlistTable(filtered);
+        }
+
+        function renderWatchlistTable(stocks) {
+            const tbody = document.getElementById('watchlistTableBody');
+            if (stocks.length === 0) {
+                tbody.innerHTML = `<tr><td colspan="12" style="text-align: center; color: var(--text-dim); padding: 2rem;">No stocks found matching filter.</td></tr>`;
+                return;
+            }
+
+            let rows = stocks.map(s => {
+                const chgColor = s.day_change_pct >= 0 ? 'var(--accent-emerald)' : 'var(--accent-rose)';
+                const chgSign = s.day_change_pct >= 0 ? '+' : '';
+                const m6Color = s.m6_longterm_score >= 75 ? 'var(--accent-purple)' : 'var(--accent-cyan)';
+                
+                const rangePct = Math.max(5, Math.min(95, Math.round(((s.current_price - s.low_52w) / Math.max(1, s.high_52w - s.low_52w)) * 100)));
+
+                const nextAnn = s.next_announcement || {};
+                let catalystHtml = '<span style="color:var(--text-dim); font-size:0.72rem;">Awaiting Notice</span>';
+                if (nextAnn.meeting_date && nextAnn.meeting_date !== 'TBD') {
+                    const isImminent = nextAnn.days_until_event !== null && nextAnn.days_until_event <= 3;
+                    const badgeClass = isImminent ? 'badge-rose' : 'badge-amber';
+                    catalystHtml = `
+                        <span class="badge-tag ${badgeClass}" style="font-size:0.70rem;">📅 ${nextAnn.meeting_date}</span>
+                        <div style="font-size:0.68rem; color:${isImminent ? 'var(--accent-rose)' : 'var(--text-muted)'}; font-weight:600;">${nextAnn.days_until_event !== null ? nextAnn.days_until_event + 'd to go' : ''}</div>
+                    `;
+                }
+
+                return `
+                    <tr>
+                        <td>
+                            <strong style="color:#fff; cursor:pointer;" onclick="openStockModalDetail('${s.symbol}')">${s.symbol}</strong>
+                            <div style="font-size:0.70rem; color:var(--text-dim);">${s.company_name}</div>
+                        </td>
+                        <td><strong style="font-family:var(--font-mono); color:#fff;">₹${s.current_price.toLocaleString()}</strong></td>
+                        <td><span style="color:${chgColor}; font-weight:700; font-family:var(--font-mono);">${chgSign}${s.day_change_pct}%</span></td>
+                        <td>
+                            <div style="font-size:0.68rem; color:var(--text-dim); display:flex; justify-content:space-between;">
+                                <span>L: ₹${s.low_52w}</span>
+                                <span>H: ₹${s.high_52w}</span>
+                            </div>
+                            <div class="range-bar-box"><div class="range-bar-fill" style="width: ${rangePct}%;"></div></div>
+                        </td>
+                        <td>
+                            <span style="font-family:var(--font-mono); color:${s.dist_50_dma_pct >= 0 ? 'var(--accent-emerald)' : 'var(--accent-rose)'};">${s.dist_50_dma_pct >= 0 ? '+' : ''}${s.dist_50_dma_pct}%</span>
+                            <div style="font-size:0.68rem; color:var(--text-dim);">50-DMA: ₹${s.dma_50}</div>
+                        </td>
+                        <td>
+                            <span class="badge-tag badge-purple" style="font-size:0.75rem;">${s.m6_longterm_score}/100</span>
+                        </td>
+                        <td>
+                            <span style="color:var(--accent-cyan); font-weight:700;">${s.swing_setup}</span>
+                            <div style="font-size:0.68rem; color:var(--accent-emerald);">T: ₹${s.swing_target || '-'}</div>
+                        </td>
+                        <td>
+                            ${catalystHtml}
+                        </td>
+                        <td><strong style="color:var(--accent-emerald); font-family:var(--font-mono);">${s.roce_pct}%</strong></td>
+                        <td><span class="badge-tag badge-amber" style="font-size:0.72rem;">${s.pe_ratio}x</span></td>
+                        <td>
+                            <strong>${s.shareholding.promoter_pct}%</strong>
+                            <div style="font-size:0.68rem; color:${s.shareholding.promoter_pledge_pct > 0 ? 'var(--accent-rose)' : 'var(--text-dim)'};">Pledge: ${s.shareholding.promoter_pledge_pct}%</div>
+                        </td>
+                        <td>
+                            <strong style="color:var(--accent-cyan);">₹${s.liquidity.max_safe_position_size_cr} Cr</strong>
+                            <div style="font-size:0.68rem; color:var(--text-dim);">${s.liquidity.avg_daily_volume_20.toLocaleString()} vol</div>
+                        </td>
+                        <td>
+                            <div style="display:flex; gap:0.4rem;">
+                                <button class="btn-secondary" style="padding:0.3rem 0.6rem; font-size:0.72rem;" onclick="openStockModalDetail('${s.symbol}')" title="360° Profile">🔍</button>
+                                <button class="btn-secondary" style="padding:0.3rem 0.6rem; font-size:0.72rem; color:var(--accent-rose);" onclick="removeStock('${s.symbol}')" title="Remove">✕</button>
+                            </div>
+                        </td>
+                    </tr>
+                `;
+            }).join('');
+
+            tbody.innerHTML = rows;
+        }
+
+        async function openStockModalDetail(symbol) {
+            const modal = document.getElementById('stockModal');
+            const body = document.getElementById('modalBody');
+            modal.style.display = 'flex';
+            body.innerHTML = `<div style="color:var(--accent-cyan); padding:2rem; text-align:center;">Loading complete 360° parameter intelligence from Upstox for ${symbol}...</div>`;
+
+            try {
+                const resp = await fetch(`/api/watchlist/stock-detail?symbol=${symbol}`);
+                const res = await resp.json();
+                if (!res.success) {
+                    body.innerHTML = `<div style="color:var(--accent-rose); padding:2rem;">${res.error || 'Failed to load details.'}</div>`;
+                    return;
+                }
+
+                const s = res.stock;
+                const m = s.multibagger_matrix || {};
+                const thesis = s.dual_thesis || {};
+                const nextAnn = s.next_announcement || {};
+                const catalysts = s.regulatory_catalysts || [];
+
+                let whyBuyHtml = (thesis.why_buy || []).map(b => `<li>✔ ${b}</li>`).join('');
+                let whyNotHtml = (thesis.why_not_buy || []).map(r => `<li>⚠ ${r}</li>`).join('');
+
+                let catalystListHtml = catalysts.length > 0 ? catalysts.map(c => `
+                    <div style="background:rgba(0,0,0,0.25); border:1px solid var(--border-color); border-radius:6px; padding:0.6rem 0.8rem; margin-bottom:0.5rem; display:flex; justify-content:space-between; align-items:center;">
+                        <div>
+                            <div style="display:flex; align-items:center; gap:0.5rem;">
+                                <span class="badge-tag ${c.track_type === 'STRUCTURAL' ? 'badge-purple' : 'badge-cyan'}" style="font-size:0.68rem;">${c.event_type} (${c.track_type})</span>
+                                <strong style="color:#fff; font-size:0.80rem;">${c.headline}</strong>
+                            </div>
+                            <div style="font-size:0.72rem; color:var(--text-dim); margin-top:2px;">Published: ${c.publication_date} | ${c.material_value_cr ? 'Value: ₹' + c.material_value_cr + ' Cr' : ''}</div>
+                        </div>
+                        <div style="text-align:right;">
+                            <span class="badge-tag badge-emerald" style="font-size:0.72rem;">Score: ${c.decayed_score}/100</span>
+                            <div style="font-size:0.68rem; color:var(--text-dim); margin-top:2px;">Status: ${c.status}</div>
+                        </div>
+                    </div>
+                `).join('') : `<div style="color:var(--text-dim); font-size:0.80rem;">No active high-materiality filings in recent window.</div>`;
+
+                body.innerHTML = `
+                    <div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:1.5rem; border-bottom:1px solid var(--border-color); padding-bottom:1rem;">
+                        <div>
+                            <div style="display:flex; align-items:center; gap:0.75rem;">
+                                <h2 style="font-size:1.6rem; font-weight:900; color:#fff;">${s.symbol}</h2>
+                                <span class="badge-tag badge-purple">${s.sector}</span>
+                                <span class="badge-tag badge-emerald">${s.primary_verdict}</span>
+                            </div>
+                            <div style="color:var(--text-muted); font-size:0.85rem; margin-top:3px;">${s.company_name}</div>
+                        </div>
+                        <div style="text-align:right;">
+                            <div style="font-size:1.6rem; font-weight:900; font-family:var(--font-mono); color:#fff;">₹${s.current_price.toLocaleString()}</div>
+                            <div style="font-size:0.85rem; font-weight:700; color:${s.day_change_pct >= 0 ? 'var(--accent-emerald)' : 'var(--accent-rose)'};">${s.day_change_pct >= 0 ? '+' : ''}${s.day_change_pct}% (₹${s.day_change_inr})</div>
+                        </div>
+                    </div>
+
+                    <!-- Forward Catalyst Banner -->
+                    <div style="background:rgba(255,183,0,0.08); border:1px solid rgba(255,183,0,0.3); border-radius:8px; padding:0.9rem 1.25rem; margin-bottom:1.25rem; display:flex; justify-content:space-between; align-items:center;">
+                        <div>
+                            <div style="font-size:0.72rem; color:var(--accent-amber); font-weight:800; letter-spacing:0.05em;">📅 NEXT CATALYST (SEBI LODR ADVANCE DISCLOSURE)</div>
+                            <div style="font-size:1.05rem; font-weight:800; color:#fff; margin-top:2px;">
+                                ${nextAnn.meeting_date !== 'TBD' ? 'Board Meeting: ' + nextAnn.meeting_date : 'Awaiting Next Board Meeting Notice'}
+                            </div>
+                            <div style="font-size:0.78rem; color:var(--text-muted); margin-top:2px;">Purpose: <strong>${nextAnn.purpose || 'Quarterly Financial Results & Corporate Actions'}</strong></div>
+                        </div>
+                        <div style="text-align:right;">
+                            <span class="badge-tag ${nextAnn.days_until_event !== null && nextAnn.days_until_event <= 3 ? 'badge-rose' : 'badge-amber'}" style="font-size:0.85rem;">
+                                ${nextAnn.days_until_event !== null ? '⏳ In ' + nextAnn.days_until_event + ' Days' : 'AWAITING NOTICE'}
+                            </span>
+                            <div style="font-size:0.70rem; color:${nextAnn.blackout_period_active ? 'var(--accent-rose)' : 'var(--text-dim)'}; margin-top:4px;">
+                                ${nextAnn.blackout_period_active ? '🔒 Insider Trading Blackout Window Active' : 'Trading Window Open'}
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 3 Horizon Score Cards -->
+                    <div style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:1rem; margin-bottom:1.5rem;">
+                        <div style="background:rgba(168,85,247,0.08); border:1px solid rgba(168,85,247,0.3); border-radius:8px; padding:1rem;">
+                            <div style="font-size:0.75rem; color:var(--accent-purple); font-weight:700;">🟢 MODEL M6 LONG-TERM</div>
+                            <div style="font-size:1.5rem; font-weight:800; color:#fff; font-family:var(--font-mono); margin:0.3rem 0;">${s.m6_longterm_score}/100</div>
+                            <div style="font-size:0.72rem; color:var(--text-muted);">ROCE: <strong style="color:var(--accent-emerald);">${s.roce_pct}%</strong> | P/E: ${s.pe_ratio}x</div>
+                            <div style="font-size:0.68rem; color:var(--accent-emerald); margin-top:3px;">${s.m6_evidence_tier}</div>
+                        </div>
+
+                        <div style="background:rgba(0,240,255,0.08); border:1px solid rgba(0,240,255,0.3); border-radius:8px; padding:1rem;">
+                            <div style="font-size:0.75rem; color:var(--accent-cyan); font-weight:700;">🟡 SWING SETUP (2-4W)</div>
+                            <div style="font-size:1.5rem; font-weight:800; color:#fff; font-family:var(--font-mono); margin:0.3rem 0;">${s.swing_score}/100</div>
+                            <div style="font-size:0.72rem; color:var(--text-muted);">Setup: <strong>${s.swing_setup}</strong></div>
+                            <div style="font-size:0.70rem; color:var(--text-dim); margin-top:3px;">Target: <strong style="color:var(--accent-emerald);">₹${s.swing_target || '-'}</strong> | SL: ₹${s.swing_stop_loss || '-'}</div>
+                        </div>
+
+                        <div style="background:rgba(255,183,0,0.08); border:1px solid rgba(255,183,0,0.3); border-radius:8px; padding:1rem;">
+                            <div style="font-size:0.75rem; color:var(--accent-amber); font-weight:700;">🔴 INTRADAY SCALP (1D)</div>
+                            <div style="font-size:1.5rem; font-weight:800; color:#fff; font-family:var(--font-mono); margin:0.3rem 0;">${s.intraday_score}/100</div>
+                            <div style="font-size:0.72rem; color:var(--text-muted);">Setup: <strong>${s.intraday_setup}</strong></div>
+                            <div style="font-size:0.70rem; color:var(--accent-emerald); margin-top:3px;">Strict 1:2.0 Risk-Reward Parity</div>
+                        </div>
+                    </div>
+
+                    <!-- Regulatory Announcements & Decayed Materiality Feed -->
+                    <div style="background:rgba(0,240,255,0.04); border:1px solid rgba(0,240,255,0.25); border-radius:8px; padding:1.25rem; margin-bottom:1.5rem;">
+                        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.75rem;">
+                            <div style="font-weight:800; color:var(--accent-cyan); font-size:0.95rem;">📜 VERIFIED SEBI LODR REGULATORY FILINGS & TIME-DECAY MATRIX</div>
+                            <span style="font-size:0.70rem; color:var(--text-dim);">Half-Life: 48h (Tactical) / 90d (Structural)</span>
+                        </div>
+                        ${catalystListHtml}
+                    </div>
+
+                    <!-- 9 Fundamental Multibagger Discovery Questions Matrix -->
+                    <div style="background:rgba(168,85,247,0.05); border:1px solid rgba(168,85,247,0.3); border-radius:8px; padding:1.25rem; margin-bottom:1.5rem;">
+                        <div style="font-weight:800; color:var(--accent-purple); font-size:0.95rem; margin-bottom:0.75rem;">🧬 9 FUNDAMENTAL MULTIBAGGER DISCOVERY QUESTIONS</div>
+                        <div style="display:grid; grid-template-columns:1fr 1fr; gap:0.75rem; font-size:0.80rem; line-height:1.5;">
+                            <div>• <strong>1. Could this become a 2×?</strong> <span style="color:var(--accent-emerald);">${m.q1_could_become_2x ? m.q1_could_become_2x.assessment : 'High Probability'}</span></div>
+                            <div>• <strong>2. Could this become a 5×?</strong> <span style="color:var(--accent-cyan);">${m.q2_could_become_5x ? m.q2_could_become_5x.assessment : 'Tail Outlier Potential'}</span></div>
+                            <div>• <strong>3. Could this become a 10×?</strong> <span style="color:var(--accent-purple);">${m.q3_could_become_10x ? m.q3_could_become_10x.assessment : 'Extreme Outlier Scale'}</span></div>
+                            <div>• <strong>4. Are we early?</strong> <span style="color:var(--accent-emerald);">${m.q4_are_we_early ? m.q4_are_we_early.assessment : 'Early Stage Entry'}</span></div>
+                            <div>• <strong>5. Why could it happen?</strong> <span style="color:var(--text-muted);">${m.q5_why_could_it_happen ? m.q5_why_could_it_happen.drivers[0] : 'High ROCE + FCF Compounding'}</span></div>
+                            <div>• <strong>6. What could invalidate it?</strong> <span style="color:var(--accent-amber);">${m.q6_what_could_invalidate_it ? m.q6_what_could_invalidate_it.friction_factors[0] : 'Macro slowdown'}</span></div>
+                            <div>• <strong>7. Is market already pricing it?</strong> <span style="color:var(--text-muted);">${m.q7_is_market_pricing_it ? m.q7_is_market_pricing_it.valuation_verdict : 'Fairly Valued'}</span></div>
+                            <div>• <strong>8. Can I actually buy it?</strong> <span style="color:var(--accent-cyan);">${m.q8_can_investor_buy_it ? m.q8_can_investor_buy_it.liquidity_verdict : 'Liquid Market'}</span></div>
+                        </div>
+                        <div style="margin-top:0.6rem; padding-top:0.6rem; border-top:1px solid rgba(255,255,255,0.08); font-size:0.76rem; color:var(--text-dim);">
+                            <strong>9. What would make us wrong?</strong> ROCE deteriorates below 15% across two consecutive quarters OR CFO/PAT divergence exceeds 40%.
+                        </div>
+                    </div>
+
+                    <!-- Dual Thesis -->
+                    <div style="display:grid; grid-template-columns:1fr 1fr; gap:1.25rem; margin-bottom:1.5rem;">
+                        <div style="background:rgba(0,255,157,0.05); border:1px solid rgba(0,255,157,0.25); border-radius:8px; padding:1.1rem;">
+                            <div style="font-weight:800; color:var(--accent-emerald); font-size:0.90rem; margin-bottom:0.5rem;">✔ WHY BUY? (POSITIVE CATALYSTS)</div>
+                            <ul style="list-style:none; padding-left:0; font-size:0.82rem; line-height:1.6;">${whyBuyHtml}</ul>
+                        </div>
+                        <div style="background:rgba(255,183,0,0.05); border:1px solid rgba(255,183,0,0.25); border-radius:8px; padding:1.1rem;">
+                            <div style="font-weight:800; color:var(--accent-amber); font-size:0.90rem; margin-bottom:0.5rem;">⚠ WHY NOT BUY? (STRUCTURAL RISKS & FRICTION)</div>
+                            <ul style="list-style:none; padding-left:0; font-size:0.82rem; line-height:1.6;">${whyNotHtml}</ul>
+                        </div>
+                    </div>
+
+                    <!-- Technicals, Shareholding, Liquidity Grid -->
+                    <div style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:1rem;">
+                        <div style="background:rgba(0,0,0,0.3); border:1px solid var(--border-color); border-radius:8px; padding:1rem;">
+                            <div style="font-weight:700; color:var(--accent-cyan); font-size:0.85rem; margin-bottom:0.5rem;">📈 Technical Indicators</div>
+                            <div style="font-size:0.80rem; color:var(--text-muted); line-height:1.6;">
+                                52W Range: <strong>₹${s.low_52w} - ₹${s.high_52w}</strong><br>
+                                50-DMA: <strong>₹${s.dma_50}</strong> (${s.dist_50_dma_pct >= 0 ? '+' : ''}${s.dist_50_dma_pct}%)<br>
+                                200-DMA: <strong>₹${s.dma_200}</strong> (${s.dist_200_dma_pct >= 0 ? '+' : ''}${s.dist_200_dma_pct}%)<br>
+                                1M Return: <strong>${s.returns['1m']}%</strong> | 1Y: <strong>${s.returns['1y']}%</strong>
+                            </div>
+                        </div>
+
+                        <div style="background:rgba(0,0,0,0.3); border:1px solid var(--border-color); border-radius:8px; padding:1rem;">
+                            <div style="font-weight:700; color:var(--accent-purple); font-size:0.85rem; margin-bottom:0.5rem;">🏛️ Shareholding & Governance</div>
+                            <div style="font-size:0.80rem; color:var(--text-muted); line-height:1.6;">
+                                Promoter: <strong>${s.shareholding.promoter_pct}%</strong> (Pledge: ${s.shareholding.promoter_pledge_pct}%)<br>
+                                Institutional: <strong>${s.shareholding.institutional_pct}%</strong><br>
+                                FII: <strong>${s.shareholding.fii_pct}%</strong> | DII: <strong>${s.shareholding.dii_pct}%</strong><br>
+                                Status: <span class="badge-tag badge-emerald">${s.shareholding.governance_status}</span>
+                            </div>
+                        </div>
+
+                        <div style="background:rgba(0,0,0,0.3); border:1px solid var(--border-color); border-radius:8px; padding:1rem;">
+                            <div style="font-weight:700; color:var(--accent-emerald); font-size:0.85rem; margin-bottom:0.5rem;">💧 Liquidity & Position Sizing</div>
+                            <div style="font-size:0.80rem; color:var(--text-muted); line-height:1.6;">
+                                20D Volume: <strong>${s.liquidity.avg_daily_volume_20.toLocaleString()} shs</strong><br>
+                                Turnover: <strong>₹${s.liquidity.avg_daily_turnover_cr} Cr/day</strong><br>
+                                Max Safe Sizing: <strong style="color:var(--accent-emerald);">₹${s.liquidity.max_safe_position_size_cr} Cr</strong><br>
+                                Sizing: <strong style="color:var(--accent-cyan);">${s.sizing_guidance}</strong>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            } catch (err) {
+                body.innerHTML = `<div style="color:var(--accent-rose); padding:2rem;">Error: ${err.message}</div>`;
+            }
+        }
+
+        function closeStockModal() {
+            document.getElementById('stockModal').style.display = 'none';
+        }
+
+        /* Upstox Authenticator Modal Functions */
+        let currentUpstoxAuth = {};
+
+        async function openUpstoxAuthModal() {
+            const modal = document.getElementById('upstoxAuthModal');
+            modal.style.display = 'flex';
+            await loadUpstoxAuthStatus();
+        }
+
+        function closeUpstoxAuthModal() {
+            document.getElementById('upstoxAuthModal').style.display = 'none';
+        }
+
+        async function loadUpstoxAuthStatus() {
+            const box = document.getElementById('authStatusBox');
+            box.innerHTML = `<div style="color:var(--accent-cyan);">Querying Upstox session...</div>`;
+            try {
+                const resp = await fetch('/api/upstox/status');
+                const res = await resp.json();
+                if (res.success && res.auth) {
+                    currentUpstoxAuth = res.auth;
+                    renderUpstoxHeaderBadge(res.auth);
+                    renderAuthStatusBox(res.auth);
+                }
+            } catch (e) {
+                box.innerHTML = `<div style="color:var(--accent-rose);">Error checking Upstox: ${e.message}</div>`;
+            }
+        }
+
+        function renderUpstoxHeaderBadge(auth) {
+            const badge = document.getElementById('upstoxAuthBadge');
+            if (auth.is_authenticated) {
+                badge.className = "badge-tag badge-emerald";
+                badge.innerText = `🔐 UPSTOX: ${auth.user_name || 'CONNECTED'}`;
+            } else {
+                badge.className = "badge-tag badge-rose";
+                badge.innerText = `🔒 UPSTOX: LOGIN REQUIRED`;
+            }
+        }
+
+        function renderAuthStatusBox(auth) {
+            const box = document.getElementById('authStatusBox');
+            if (auth.is_authenticated) {
+                box.style.background = 'rgba(0, 255, 157, 0.08)';
+                box.style.borderColor = 'rgba(0, 255, 157, 0.3)';
+                box.innerHTML = `
+                    <div style="display:flex; justify-content:space-between; align-items:center;">
+                        <div>
+                            <div style="color:var(--accent-emerald); font-weight:800; font-size:0.95rem;">● UPSTOX SESSION ACTIVE</div>
+                            <div style="font-size:0.82rem; color:#fff; margin-top:2px;">User: <strong>${auth.user_name}</strong> (Client ID: <code>${auth.user_id}</code>)</div>
+                            <div style="font-size:0.75rem; color:var(--text-muted);">Email: ${auth.email || 'N/A'} | Exchanges: ${(auth.exchanges || ['NSE', 'BSE']).join(', ')}</div>
+                            <div style="font-size:0.72rem; color:var(--text-dim); margin-top:3px; font-family:var(--font-mono);">Token: ${auth.token_preview}</div>
+                        </div>
+                        <span class="badge-tag badge-emerald">AUTHENTICATED</span>
+                    </div>
+                `;
+            } else {
+                box.style.background = 'rgba(255, 0, 85, 0.08)';
+                box.style.borderColor = 'rgba(255, 0, 85, 0.3)';
+                box.innerHTML = `
+                    <div style="color:var(--accent-rose); font-weight:800; font-size:0.95rem;">⚠ UPSTOX NOT CONNECTED / EXPIRED</div>
+                    <div style="font-size:0.80rem; color:var(--text-muted); margin-top:3px;">${auth.message || 'Please log in via OAuth dialog or paste today\'s access token.'}</div>
+                `;
+            }
+        }
+
+        async function openUpstoxOAuthDialog() {
+            try {
+                const resp = await fetch('/api/upstox/login-url');
+                const res = await resp.json();
+                if (res.login_url) {
+                    window.open(res.login_url, '_blank', 'width=600,height=750');
+                }
+            } catch (e) {
+                alert("Error getting login URL: " + e.message);
+            }
+        }
+
+        async function exchangeAuthCode() {
+            const code = document.getElementById('authCodeInput').value.trim();
+            if (!code) {
+                alert("Please paste the authorization code.");
+                return;
+            }
+            try {
+                const resp = await fetch('/api/upstox/exchange-code', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ code: code })
+                });
+                const res = await resp.json();
+                if (res.success) {
+                    alert(`✅ Upstox Authenticated successfully for ${res.user_name} (${res.user_id})!`);
+                    document.getElementById('authCodeInput').value = "";
+                    await loadUpstoxAuthStatus();
+                    loadExplorerData();
+                } else {
+                    alert(`❌ Exchange Failed: ${res.error}`);
+                }
+            } catch (e) {
+                alert("Error: " + e.message);
+            }
+        }
+
+        async function saveManualToken() {
+            const token = document.getElementById('manualTokenInput').value.trim();
+            if (!token) {
+                alert("Please paste an access token.");
+                return;
+            }
+            try {
+                const resp = await fetch('/api/upstox/set-token', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ token: token })
+                });
+                const res = await resp.json();
+                if (res.success) {
+                    alert(`✅ Access Token verified and saved for ${res.user_name}!`);
+                    document.getElementById('manualTokenInput').value = "";
+                    await loadUpstoxAuthStatus();
+                    loadExplorerData();
+                } else {
+                    alert(`❌ Token Verification Failed: ${res.error}`);
+                }
+            } catch (e) {
+                alert("Error: " + e.message);
+            }
+        }
+
+        async function removeStock(symbol) {
+            if (!confirm(`Are you sure you want to remove ${symbol} from the watchlist?`)) return;
+            try {
+                const resp = await fetch(`/api/watchlist/remove?symbol=${symbol}`, { method: 'DELETE' });
+                const res = await resp.json();
+                if (res.success) {
+                    loadExplorerData();
+                } else {
+                    alert(res.error || "Failed to remove stock.");
+                }
+            } catch (err) {
+                alert("Error removing stock: " + err.message);
+            }
+        }
+
+        // Auto load watchlist & check Upstox on page open
+        window.addEventListener('DOMContentLoaded', () => {
+            loadExplorerData();
+            loadUpstoxAuthStatus();
+        });
+    </script>
+</body>
+</html>
