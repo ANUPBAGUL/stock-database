@@ -623,9 +623,13 @@
                     <button class="pill-btn" onclick="filterHorizon('SWING')">📈 Swing Setups (Score ≥ 60)</button>
                     <button class="pill-btn" onclick="filterHorizon('INTRADAY')">⚡ Intraday Breakouts</button>
                 </div>
-                <div style="display: flex; gap: 0.75rem; align-items: center;">
-                    <input type="text" id="tableSearchInput" class="search-input" placeholder="🔍 Search symbol or company..." onkeyup="searchWatchlistTable()">
-                    <button class="btn-secondary" onclick="loadExplorerData(true)">🔄 Refresh Table</button>
+                <div style="display: flex; gap: 0.75rem; align-items: center; flex-wrap: wrap;">
+                    <div style="display: flex; gap: 0.4rem; align-items: center;">
+                        <input type="text" id="quickAddSymbolInput" class="search-input" style="width: 170px;" placeholder="➕ Add Stock (e.g. INFY)" onkeypress="if(event.key==='Enter') quickAddStockFromBar()">
+                        <button class="btn-primary" style="padding: 0.5rem 0.85rem; font-size: 0.80rem;" onclick="quickAddStockFromBar()">+ Add</button>
+                    </div>
+                    <input type="text" id="tableSearchInput" class="search-input" placeholder="🔍 Search watchlist..." onkeyup="searchWatchlistTable()">
+                    <button class="btn-secondary" onclick="loadExplorerData(true)">🔄 Refresh</button>
                 </div>
             </div>
 
@@ -1031,17 +1035,69 @@
         }
 
         function searchWatchlistTable() {
-            const q = document.getElementById('tableSearchInput').value.toLowerCase();
+            const q = document.getElementById('tableSearchInput').value.toLowerCase().trim();
             const filtered = allWatchlistData.filter(s => 
                 s.symbol.toLowerCase().includes(q) || s.company_name.toLowerCase().includes(q) || s.sector.toLowerCase().includes(q)
             );
-            renderWatchlistTable(filtered);
+            renderWatchlistTable(filtered, q);
         }
 
-        function renderWatchlistTable(stocks) {
+        async function quickAddStockFromBar() {
+            const input = document.getElementById('quickAddSymbolInput');
+            const sym = input.value.trim().toUpperCase();
+            if (!sym) {
+                alert("Please enter a stock symbol to add.");
+                return;
+            }
+            input.value = "";
+            await quickAnalyzeAndAddStock(sym);
+        }
+
+        async function quickAnalyzeAndAddStock(symbol) {
+            symbol = symbol.toUpperCase().trim();
+            if (!symbol) return;
+            const tbody = document.getElementById('watchlistTableBody');
+            tbody.innerHTML = `<tr><td colspan="13" style="text-align: center; color: var(--accent-cyan); padding: 2.5rem; font-family: var(--font-mono);">⏳ Ingesting and analyzing 360° parameters for ${symbol} via Upstox & PIT Financials...</td></tr>`;
+            try {
+                const resp = await fetch(`/api/watchlist/stock-detail?symbol=${symbol}`);
+                const res = await resp.json();
+                if (res.success) {
+                    await loadExplorerData(true);
+                    document.getElementById('tableSearchInput').value = "";
+                    openStockModalDetail(symbol);
+                } else {
+                    alert("Error analyzing stock: " + (res.error || "Unknown error"));
+                    await loadExplorerData();
+                }
+            } catch (e) {
+                alert("Network error: " + e.message);
+                await loadExplorerData();
+            }
+        }
+
+        function renderWatchlistTable(stocks, searchKeyword = "") {
             const tbody = document.getElementById('watchlistTableBody');
             if (stocks.length === 0) {
-                tbody.innerHTML = `<tr><td colspan="12" style="text-align: center; color: var(--text-dim); padding: 2rem;">No stocks found matching filter.</td></tr>`;
+                if (searchKeyword && searchKeyword.trim().length > 0) {
+                    const cleanSym = searchKeyword.toUpperCase().trim();
+                    tbody.innerHTML = `
+                        <tr>
+                            <td colspan="13" style="text-align: center; color: var(--text-muted); padding: 2.5rem;">
+                                <div style="font-size: 1.05rem; color: #fff; font-weight: 800; margin-bottom: 0.4rem;">
+                                    Stock <span style="color: var(--accent-cyan);">"${cleanSym}"</span> is not yet in your active watchlist.
+                                </div>
+                                <div style="font-size: 0.80rem; color: var(--text-dim); margin-bottom: 1.25rem;">
+                                    Click below to ingest live market prices, compute ROCE, M6 scores, and add "${cleanSym}" to your watchlist.
+                                </div>
+                                <button class="btn-primary" style="padding: 0.55rem 1.25rem; font-size: 0.82rem;" onclick="quickAnalyzeAndAddStock('${cleanSym}')">
+                                    ⚡ Ingest & Add "${cleanSym}" to Watchlist
+                                </button>
+                            </td>
+                        </tr>
+                    `;
+                } else {
+                    tbody.innerHTML = `<tr><td colspan="13" style="text-align: center; color: var(--text-dim); padding: 2rem;">No stocks found matching filter.</td></tr>`;
+                }
                 return;
             }
 

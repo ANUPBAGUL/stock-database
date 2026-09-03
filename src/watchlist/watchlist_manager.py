@@ -234,6 +234,12 @@ class WatchlistManager:
             db.add(company)
             db.commit()
             db.refresh(company)
+        else:
+            # When a stock is analyzed, ensure it is activated in the watchlist
+            if company.status != "ACTIVE":
+                company.status = "ACTIVE"
+                db.commit()
+                db.refresh(company)
 
         # 1.1 Ensure daily price candles exist and are current (Yahoo Finance fallback/sync)
         latest_price_rec = db.query(DailyPriceRaw).filter_by(

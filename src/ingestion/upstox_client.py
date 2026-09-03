@@ -311,6 +311,8 @@ class UpstoxMarketDataIngestion:
                 company.company_name = company_name
             if isin_code:
                 company.isin = isin_code
+            if company.status != "ACTIVE":
+                company.status = "ACTIVE"
             db.commit()
 
         # 2. Fetch Daily Candles from Upstox
