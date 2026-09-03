@@ -282,8 +282,9 @@ class WatchlistManager:
                 logger.warning(f"Error fetching Yahoo Finance prices for {symbol}: {e}")
 
         # 2. Ensure Real Financials Exist (Dynamic Real-Data Ingestion via Screener XBRL)
+        # 2. Ensure Real Financials Exist (Dynamic Real-Data Ingestion via Screener XBRL)
         fin_count = db.query(BitemporalFinancial).filter_by(company_id=company.company_id).count()
-        if fin_count < 8 and not fast_mode:
+        if fin_count < 8:
             try:
                 from src.ingestion.screener_client import ScreenerClient
                 sc = ScreenerClient()
@@ -343,15 +344,16 @@ class WatchlistManager:
                 logger.warning(f"Error fetching Screener financials for {symbol}: {e}")
 
         # Shared NSE client — single session used for shareholding, board meetings, and announcements
-        nse_client = NseClient() if not fast_mode else None
+        from src.db.models.governance import ShareholdingHistory
+        sh_count = db.query(ShareholdingHistory).filter_by(company_id=company.company_id).count()
+        nse_client = NseClient() if (not fast_mode or sh_count == 0) else None
 
         # 3. Shareholding Pattern
         sh_data = None
-        if not fast_mode:
+        if sh_count == 0 or not fast_mode:
             try:
                 sh_data = ShareholdingClient.fetch_shareholding_pattern(symbol, nse_client=nse_client)
                 if sh_data and sh_data.get("promoter_holding_pct") is not None:
-                    from src.db.models.governance import ShareholdingHistory
                     import uuid
                     raw_p_date = sh_data.get("period_end_date")
                     if isinstance(raw_p_date, str):
@@ -407,9 +409,10 @@ class WatchlistManager:
                 sh_data = None
 
         # 4. Official Regulatory Disclosures & Half-Life Decay Scoring
+        ann_count = db.query(CorporateAnnouncement).filter_by(company_id=company.company_id).count()
         active_announcements = []
         ingested_at_now = datetime.utcnow()
-        if not fast_mode:
+        if ann_count == 0 or not fast_mode:
             try:
                 from src.ingestion.bse_announcements_client import BseAnnouncementsClient
                 bse_client = BseAnnouncementsClient()
