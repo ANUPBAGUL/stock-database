@@ -26,6 +26,8 @@ from src.analytics.ownership_velocity import OwnershipVelocityEngine
 from src.analytics.competitive_engine import CompetitivePositionEngine
 from src.analytics.lifecycle_classifier import LifecycleClassifier
 from src.analytics.latent_upside_engine import LatentUpsideEngine
+from src.analytics.canonical_hasher import compute_canonical_hash
+from src.analytics.wealth_compounding_engine import WealthCompoundingEngine
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -126,6 +128,17 @@ class HistoricalPITReplayEngine:
             latent_res = LatentUpsideEngine.calculate_latent_upside_map(ttm_rev, ttm_ebit, ttm_pat, mcap_t0, 20.0)
             coords_res = LifecycleClassifier.calculate_continuous_lifecycle_coordinates(mcap_t0, accel_res.get("latest_revenue_yoy_pct", 20.0), accel_res.get("latest_pat_yoy_pct", 25.0), 20.0, 10.0, pe_t0)
 
+            # Canonical input and output hashing (Audit Invariant H)
+            input_payload = {"ttm_revenue": ttm_rev, "ttm_ebit": ttm_ebit, "ttm_pat": ttm_pat, "pe": pe_t0, "t0_date": str(t0_date)}
+            feat_payload = {
+                "economic_roic_pct": roic_res["economic_roic_pct"],
+                "growth_capex_cr": capex_res["growth_capex_cr"],
+                "reinvestment_rate": reinvest_res["growth_reinvestment_rate_pct"],
+                "niche_tam_cr": tam_res["niche_tam_cr"]
+            }
+            input_h = compute_canonical_hash(input_payload)
+            output_h = compute_canonical_hash(feat_payload)
+
             # Persist historical ResearchFeatureSnapshot
             snap_id = str(uuid.uuid4())
             rf_snap = ResearchFeatureSnapshot(
@@ -133,6 +146,15 @@ class HistoricalPITReplayEngine:
                 company_id=comp.company_id,
                 observation_date=t0_date,
                 t0_timestamp=datetime.combine(t0_date, datetime.min.time()),
+                # Machine-readable provenance (Audit Invariant F)
+                source_fact_ids=[f"XBRL_STATEMENT_{q_end}"],
+                source_published_at=datetime.combine(t0_date, datetime.min.time()),
+                source_period_end=q_end,
+                feature_engine_version="v3.2.0",
+                peer_selection_version="v1.0.0",
+                methodology_version="INSTITUTIONAL_P0",
+                input_hash=input_h,
+                output_hash=output_h,
                 economic_roic_pct=roic_res["economic_roic_pct"],
                 capex_total_cr=capex_res["total_capex_cr"],
                 growth_capex_cr=capex_res["growth_capex_cr"],
@@ -191,6 +213,20 @@ class HistoricalPITReplayEngine:
                 is_5x = (max_gain_pct >= 400.0)
                 is_10x = (max_gain_pct >= 900.0)
 
+                # Total Shareholder Wealth Compounding
+                wealth_w0 = 100.0
+                wealth_wt = round(wealth_w0 * (1.0 + (latest_future_price - t0_price) / max(0.1, t0_price)), 4)
+                total_wealth_ret = round(((latest_future_price - t0_price) / max(0.1, t0_price)) * 100.0, 2)
+
+                # Generic Half-Open Outcome Interval (Audit Invariant E)
+                outcome_start = t0_date
+                outcome_end = forward_prices[-1].trading_date
+
+                # Competing Risk Event & Censoring Classification
+                event_name = "10X" if is_10x else ("5X" if is_5x else ("2X" if is_2x else None))
+                censoring_flag = "EVENT_OBSERVED" if (is_2x or is_5x or is_10x) else ("MATURE" if len(forward_prices) >= 756 else "RIGHT_CENSORED")
+                elapsed_days = int((outcome_end - outcome_start).days)
+
                 # Link with DecisionSnapshot placeholder to maintain schema integrity
                 d_snap = DecisionSnapshot(
                     snapshot_id=str(uuid.uuid4()),
@@ -212,6 +248,17 @@ class HistoricalPITReplayEngine:
                     t0_date=t0_date,
                     t0_price=t0_price,
                     market_cap_at_t0_cr=mcap_t0,
+                    wealth_start=wealth_w0,
+                    wealth_end=wealth_wt,
+                    cash_distributions_cr=0.0,
+                    corporate_proceeds_cr=0.0,
+                    total_realized_wealth_return_pct=total_wealth_ret,
+                    label_start=outcome_start,
+                    label_end=outcome_end,
+                    horizon_type="3Y",
+                    event_type=event_name,
+                    censoring_status=censoring_flag,
+                    event_time_days=elapsed_days,
                     max_forward_return_pct=max_gain_pct,
                     max_drawdown_pct=max_dd_pct,
                     is_multibagger_2x=is_2x,

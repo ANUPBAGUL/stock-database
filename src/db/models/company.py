@@ -28,7 +28,13 @@ class Company(Base):
     
     listing_date: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
     delisting_date: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
-    status: Mapped[str] = mapped_column(String(20), default="ACTIVE") # ACTIVE, DELISTED, SUSPENDED
+    status: Mapped[str] = mapped_column(String(20), default="ACTIVE") # Legacy status: ACTIVE, DELISTED, SUSPENDED
+
+    # Orthogonal Universe Dimensions
+    listing_status: Mapped[str] = mapped_column(String(32), default="ACTIVE") # ACTIVE, SUSPENDED, DELISTED, BANKRUPTCY, LIQUIDATION, MERGED, ACQUIRED
+    tradability_status: Mapped[str] = mapped_column(String(32), default="TRADABLE") # TRADABLE, RESTRICTED, HALTED, SUSPENDED
+    liquidity_status: Mapped[str] = mapped_column(String(32), default="LIQUID") # HIGH, MEDIUM, LOW, ILLIQUID
+    research_eligibility: Mapped[str] = mapped_column(String(32), default="ELIGIBLE") # ELIGIBLE, QUARANTINED, INSUFFICIENT_DATA
     
     currency: Mapped[str] = mapped_column(String(8), default="INR")
     face_value: Mapped[float] = mapped_column(Float, default=10.0)
@@ -59,4 +65,5 @@ class Company(Base):
     source_evidence: Mapped[List["RawSourceEvidence"]] = relationship("RawSourceEvidence", back_populates="company")
     quarterly_pit_states: Mapped[List["QuarterlyPITState"]] = relationship("QuarterlyPITState", back_populates="company")
     audit_traces: Mapped[List["DataAuditTrace"]] = relationship("DataAuditTrace", back_populates="company")
+    universe_memberships: Mapped[List["UniverseMembership"]] = relationship("UniverseMembership", back_populates="company")
 

@@ -27,6 +27,7 @@ from src.db.models.identity_history import CompanyIdentityHistory
 from src.db.models.data_audit_trace import DataAuditTrace
 from src.db.models.research_feature_snapshot import ResearchFeatureSnapshot
 from src.db.models.research_eligibility import ResearchEligibility
+from src.db.models.universe import UniverseMembership
 
 __all__ = [
     "Base",
@@ -65,5 +66,7 @@ __all__ = [
     "CompanyIdentityHistory",
     "DataAuditTrace",
     "ResearchFeatureSnapshot",
-    "ResearchEligibility"
+    "ResearchEligibility",
+    "UniverseMembership"
 ]
+

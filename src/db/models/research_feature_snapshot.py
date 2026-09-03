@@ -3,7 +3,7 @@ Point-in-Time Research Feature Snapshot Model.
 Stores immutable, bitemporal multidimensional economic vectors for post-experiment M7 training.
 """
 from datetime import datetime, date
-from sqlalchemy import Column, String, Float, Integer, Date, DateTime, Text, ForeignKey, Boolean
+from sqlalchemy import Column, String, Float, Integer, Date, DateTime, Text, ForeignKey, Boolean, JSON
 from sqlalchemy.orm import relationship
 
 from src.db.base import Base
@@ -17,6 +17,16 @@ class ResearchFeatureSnapshot(Base):
     observation_date = Column(Date, nullable=False, index=True)
     t0_timestamp = Column(DateTime, nullable=False, default=datetime.utcnow, index=True)
     ingested_at = Column(DateTime, nullable=False, default=datetime.utcnow)
+
+    # Machine-Readable Provenance & Lineage (Audit Invariant F)
+    source_fact_ids = Column(JSON, nullable=True) # List of financial statement IDs, announcement IDs, prices used
+    source_published_at = Column(DateTime, nullable=True) # Max publication timestamp of any input fact
+    source_period_end = Column(Date, nullable=True) # Max accounting period end date
+    feature_engine_version = Column(String(32), default="v3.2.0")
+    peer_selection_version = Column(String(32), default="v1.0.0")
+    methodology_version = Column(String(32), default="INSTITUTIONAL_P0")
+    input_hash = Column(String(64), nullable=True, index=True) # SHA-256 of canonical inputs
+    output_hash = Column(String(64), nullable=True, index=True) # SHA-256 of canonical serialized output
 
     # 1. Economic ROIC & ROIIC
     economic_roic_pct = Column(Float, nullable=True)

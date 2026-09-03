@@ -8,6 +8,7 @@ the full analytical parameter suite from AI_swing.
 
 import os
 import re
+import math
 import logging
 import threading
 from datetime import date, datetime, timedelta
@@ -247,25 +248,31 @@ class WatchlistManager:
                 days_to_fetch = 400 if price_count < 20 else 10
                 logger.info(f"Syncing recent daily price candles ({days_to_fetch}d) from Yahoo Finance for {symbol}...")
                 yf_prices = yf_client.fetch_daily_prices(symbol, today - timedelta(days=days_to_fetch), today)
+                valid_candles = 0
                 for p in yf_prices:
+                    cp = p.get("close_price")
+                    if cp is None or (isinstance(cp, float) and math.isnan(cp)) or cp <= 0:
+                        continue
                     raw_p = DailyPriceRaw(
                         company_id=company.company_id,
                         trading_date=p["trading_date"],
-                        open_price=p["open_price"],
-                        high_price=p["high_price"],
-                        low_price=p["low_price"],
-                        close_price=p["close_price"],
-                        volume=p["volume"],
-                        turnover=p.get("turnover"),
+                        open_price=p["open_price"] if p.get("open_price") and not (isinstance(p["open_price"], float) and math.isnan(p["open_price"])) else cp,
+                        high_price=p["high_price"] if p.get("high_price") and not (isinstance(p["high_price"], float) and math.isnan(p["high_price"])) else cp,
+                        low_price=p["low_price"] if p.get("low_price") and not (isinstance(p["low_price"], float) and math.isnan(p["low_price"])) else cp,
+                        close_price=cp,
+                        volume=p["volume"] if p.get("volume") and not (isinstance(p["volume"], float) and math.isnan(p["volume"])) else 0,
+                        turnover=p.get("turnover") if p.get("turnover") and not (isinstance(p.get("turnover"), float) and math.isnan(p.get("turnover"))) else None,
                         # Provenance fields — required for price reproducibility
                         exchange=p.get("exchange", "NSE"),
                         quote_type=p.get("quote_type", "CLOSE"),
                         price_source=p.get("price_source", "YFINANCE"),
                     )
                     db.merge(raw_p)
+                    valid_candles += 1
                 db.commit()
-                logger.info(f"Synced {len(yf_prices)} daily price candles for {symbol} via Yahoo Finance.")
+                logger.info(f"Synced {valid_candles} daily price candles for {symbol} via Yahoo Finance.")
             except Exception as e:
+                db.rollback()
                 logger.warning(f"Error fetching Yahoo Finance prices for {symbol}: {e}")
 
         # 2. Ensure Real Financials Exist (Dynamic Real-Data Ingestion via Screener XBRL)
@@ -595,6 +602,10 @@ class WatchlistManager:
                     latent_res = LatentUpsideEngine.calculate_latent_upside_map(rev, ebit, pat, mcap, pit_features.get("ttm_roce_pct", 20.0))
                     coords_res = LifecycleClassifier.calculate_continuous_lifecycle_coordinates(mcap, pit_features.get("revenue_growth_yoy_pct", 20.0), pit_features.get("pat_growth_yoy_pct", 25.0), pit_features.get("ttm_roce_pct", 20.0), 10.0, pe)
 
+                    from src.analytics.canonical_hasher import compute_canonical_hash
+                    in_h = compute_canonical_hash(pit_features)
+                    out_h = compute_canonical_hash(coords_res)
+
                     # Deduplicate: Check if snapshot exists for this company on today's date
                     existing_snap = db.query(ResearchFeatureSnapshot).filter_by(company_id=company.company_id, observation_date=today).first()
                     if not existing_snap:
@@ -603,6 +614,14 @@ class WatchlistManager:
                             company_id=company.company_id,
                             observation_date=today,
                             t0_timestamp=datetime.utcnow(),
+                            source_fact_ids=["LIVE_FEED_OBSERVATION"],
+                            source_published_at=datetime.utcnow(),
+                            source_period_end=today,
+                            feature_engine_version="v3.2.0",
+                            peer_selection_version="v1.0.0",
+                            methodology_version="INSTITUTIONAL_P0",
+                            input_hash=in_h,
+                            output_hash=out_h,
                             economic_roic_pct=roic_res["economic_roic_pct"],
                             capex_total_cr=capex_res["total_capex_cr"],
                             growth_capex_cr=capex_res["growth_capex_cr"],

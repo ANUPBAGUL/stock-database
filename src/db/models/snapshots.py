@@ -94,8 +94,27 @@ class ForwardOutcome(Base):
     sector_return_pct: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
     alpha_generated_pct: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
     
-    survival_status: Mapped[str] = mapped_column(String(32), default="ACTIVE") # 'ACTIVE', 'DELISTED', 'MERGED', 'SUSPENDED'
+    survival_status: Mapped[str] = mapped_column(String(32), default="ACTIVE") # 'ACTIVE', 'DELISTED', 'MERGED', 'SUSPENDED', 'BANKRUPTCY'
     daily_path_payload: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True) # Full daily trajectory vector
+
+    # Total Shareholder Wealth Compounding & Terminal Economic Realization
+    wealth_start: Mapped[float] = mapped_column(Float, default=100.0) # W0
+    wealth_end: Mapped[Optional[float]] = mapped_column(Float, nullable=True) # WT
+    cash_distributions_cr: Mapped[float] = mapped_column(Float, default=0.0) # D_t dividends
+    corporate_proceeds_cr: Mapped[float] = mapped_column(Float, default=0.0) # C_t restructuring/spin-off proceeds
+    terminal_equity_value_cr: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    cash_recovery_cr: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    total_realized_wealth_return_pct: Mapped[Optional[float]] = mapped_column(Float, nullable=True) # R_T = (WT / W0) - 1
+
+    # Generic Half-Open Outcome Interval Metadata (Audit Invariant E)
+    label_start: Mapped[Optional[date]] = mapped_column(Date, nullable=True, index=True) # Start of outcome interval
+    label_end: Mapped[Optional[date]] = mapped_column(Date, nullable=True, index=True) # End of outcome interval
+    horizon_type: Mapped[str] = mapped_column(String(16), default="3Y") # '1Y', '3Y', '5Y', 'SURVIVAL'
+
+    # Competing Risk Event Clock & Censoring Separation
+    event_type: Mapped[Optional[str]] = mapped_column(String(32), nullable=True) # '10X', 'BANKRUPTCY', 'DELISTING', 'ACQUISITION', 'OTHER_TERMINAL'
+    censoring_status: Mapped[str] = mapped_column(String(32), default="ONGOING", index=True) # 'MATURE', 'RIGHT_CENSORED', 'ADMINISTRATIVELY_CENSORED', 'DATA_CENSORED', 'ONGOING'
+    event_time_days: Mapped[Optional[int]] = mapped_column(Integer, nullable=True) # tau_i
     
     # Empirical Multibagger Labels (Ground Truth for Research & ML)
     is_multibagger_2x: Mapped[bool] = mapped_column(Boolean, default=False, index=True)
@@ -110,4 +129,5 @@ class ForwardOutcome(Base):
 
     __table_args__ = (
         Index("idx_outcomes_lookup", "company_id", "t0_date"),
+        Index("idx_outcomes_interval", "label_start", "label_end"),
     )
