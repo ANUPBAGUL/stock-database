@@ -676,7 +676,7 @@ class WatchlistManager:
         ).order_by(DailyPriceRaw.trading_date.desc()).limit(250).all()
 
         if live_quote and live_quote.get("last_price"):
-            cur_price = live_quote["last_price"]
+            cur_price = round(float(live_quote["last_price"]), 2)
             prev_price = None
             if prices:
                 if prices[0].trading_date == today and len(prices) > 1:
@@ -687,19 +687,24 @@ class WatchlistManager:
             if prev_price is None or prev_price <= 0:
                 prev_price = cur_price - (live_quote.get("net_change") or 0.0)
 
-            if live_quote.get("day_change_pct") is not None:
+            day_chg_inr = round(float(live_quote.get("net_change")) if live_quote.get("net_change") is not None else (cur_price - prev_price), 2)
+
+            if live_quote.get("day_change_pct") is not None and abs(float(live_quote.get("day_change_pct"))) > 0.0001:
                 day_chg_pct = round(float(live_quote["day_change_pct"]), 2)
+                # Ensure sign parity between INR change and PCT change
+                if day_chg_inr < 0 and day_chg_pct > 0:
+                    day_chg_pct = -abs(day_chg_pct)
+                elif day_chg_inr > 0 and day_chg_pct < 0:
+                    day_chg_pct = abs(day_chg_pct)
             elif prev_price and prev_price > 0:
-                day_chg_pct = round(((cur_price - prev_price) / prev_price) * 100, 2)
+                day_chg_pct = round((day_chg_inr / prev_price) * 100, 2)
             else:
                 day_chg_pct = 0.0
-
-            day_chg_inr = live_quote.get("net_change") if live_quote.get("net_change") is not None else round(cur_price - prev_price, 2)
         else:
             cur_price = prices[0].close_price if prices else intel.get("current_price", 1000.0)
             prev_price = prices[1].close_price if len(prices) > 1 else cur_price
-            day_chg_pct = round(((cur_price - prev_price) / max(0.01, prev_price)) * 100, 2)
             day_chg_inr = round(cur_price - prev_price, 2)
+            day_chg_pct = round((day_chg_inr / max(0.01, prev_price)) * 100, 2)
 
         high_52w = max([p.high_price for p in prices]) if prices else cur_price * 1.2
         low_52w = min([p.low_price for p in prices]) if prices else cur_price * 0.8

@@ -831,6 +831,58 @@
         let currentHorizonFilter = 'ALL';
         let countdownSeconds = 300; // 5 minutes
 
+        /* Universal Metric & Sign Parity Color Helpers */
+        function formatPriceChange(pct, inr) {
+            pct = (pct !== null && pct !== undefined) ? Number(pct) : 0;
+            inr = (inr !== null && inr !== undefined) ? Number(inr) : 0;
+            const isNeg = inr < 0 || pct < -0.0001;
+            const isZero = Math.abs(inr) < 0.0001 && Math.abs(pct) < 0.0001;
+            
+            if (isZero) {
+                return {
+                    color: 'var(--text-muted)',
+                    sign: '',
+                    pctText: '0.00%',
+                    inrText: '₹0.00',
+                    fullText: '0.00% (₹0.00)'
+                };
+            }
+            if (isNeg) {
+                const absPct = Math.abs(pct).toFixed(2);
+                const absInr = Math.abs(inr).toFixed(2);
+                return {
+                    color: 'var(--accent-rose)', // RED
+                    sign: '-',
+                    pctText: `-${absPct}%`,
+                    inrText: `-₹${absInr}`,
+                    fullText: `-${absPct}% (-₹${absInr})`
+                };
+            }
+            const absPct = Math.abs(pct).toFixed(2);
+            const absInr = Math.abs(inr).toFixed(2);
+            return {
+                color: 'var(--accent-emerald)', // GREEN
+                sign: '+',
+                pctText: `+${absPct}%`,
+                inrText: `+₹${absInr}`,
+                fullText: `+${absPct}% (+₹${absInr})`
+            };
+        }
+
+        function formatPercentMetric(val) {
+            if (val === null || val === undefined || isNaN(val)) {
+                return { text: 'N/A', color: 'var(--text-muted)' };
+            }
+            val = Number(val);
+            if (val < -0.0001) {
+                return { text: `${val.toFixed(2)}%`, color: 'var(--accent-rose)' }; // RED
+            }
+            if (Math.abs(val) <= 0.0001) {
+                return { text: '0.00%', color: 'var(--text-muted)' };
+            }
+            return { text: `+${val.toFixed(2)}%`, color: 'var(--accent-emerald)' }; // GREEN
+        }
+
         function switchMainTab(tabId) {
             document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
             document.querySelectorAll('.tab-btn').forEach(el => el.classList.remove('active'));
@@ -902,8 +954,7 @@
                 desc.innerText = `Parsed Symbols: ${res.parsed_symbols.join(', ')}. All parameters, M6 scores, and 9 Multibagger Questions are ready.`;
 
                 let cardsHtml = res.results.map(s => {
-                    const chgColor = s.day_change_pct >= 0 ? 'var(--accent-emerald)' : 'var(--accent-rose)';
-                    const chgSign = s.day_change_pct >= 0 ? '+' : '';
+                    const chg = formatPriceChange(s.day_change_pct, s.day_change_inr);
                     const m6Color = s.m6_longterm_score >= 75 ? 'var(--accent-purple)' : 'var(--accent-cyan)';
                     return `
                         <div class="stock-card">
@@ -914,7 +965,7 @@
                                 </div>
                                 <div>
                                     <div class="card-price">₹${s.current_price.toLocaleString()}</div>
-                                    <div class="card-chg" style="color: ${chgColor}; text-align: right;">${chgSign}${s.day_change_pct}%</div>
+                                    <div class="card-chg" style="color: ${chg.color}; text-align: right;">${chg.pctText}</div>
                                 </div>
                             </div>
                             <div class="card-metrics-grid">
@@ -1102,8 +1153,8 @@
             }
 
             let rows = stocks.map(s => {
-                const chgColor = s.day_change_pct >= 0 ? 'var(--accent-emerald)' : 'var(--accent-rose)';
-                const chgSign = s.day_change_pct >= 0 ? '+' : '';
+                const chg = formatPriceChange(s.day_change_pct, s.day_change_inr);
+                const dma50 = formatPercentMetric(s.dist_50_dma_pct);
                 const m6Color = s.m6_longterm_score >= 75 ? 'var(--accent-purple)' : 'var(--accent-cyan)';
                 
                 const rangePct = Math.max(5, Math.min(95, Math.round(((s.current_price - s.low_52w) / Math.max(1, s.high_52w - s.low_52w)) * 100)));
@@ -1126,7 +1177,7 @@
                             <div style="font-size:0.70rem; color:var(--text-dim);">${s.company_name}</div>
                         </td>
                         <td><strong style="font-family:var(--font-mono); color:#fff;">₹${s.current_price.toLocaleString()}</strong></td>
-                        <td><span style="color:${chgColor}; font-weight:700; font-family:var(--font-mono);">${chgSign}${s.day_change_pct}%</span></td>
+                        <td><span style="color:${chg.color}; font-weight:700; font-family:var(--font-mono);">${chg.pctText}</span></td>
                         <td>
                             <div style="font-size:0.68rem; color:var(--text-dim); display:flex; justify-content:space-between;">
                                 <span>L: ₹${s.low_52w}</span>
@@ -1135,7 +1186,7 @@
                             <div class="range-bar-box"><div class="range-bar-fill" style="width: ${rangePct}%;"></div></div>
                         </td>
                         <td>
-                            <span style="font-family:var(--font-mono); color:${s.dist_50_dma_pct >= 0 ? 'var(--accent-emerald)' : 'var(--accent-rose)'};">${s.dist_50_dma_pct >= 0 ? '+' : ''}${s.dist_50_dma_pct}%</span>
+                            <span style="font-family:var(--font-mono); font-weight:700; color:${dma50.color};">${dma50.text}</span>
                             <div style="font-size:0.68rem; color:var(--text-dim);">50-DMA: ₹${s.dma_50}</div>
                         </td>
                         <td>
@@ -1191,6 +1242,12 @@
                 const nextAnn = s.next_announcement || {};
                 const catalysts = s.regulatory_catalysts || [];
 
+                const modalChg = formatPriceChange(s.day_change_pct, s.day_change_inr);
+                const modalDma50 = formatPercentMetric(s.dist_50_dma_pct);
+                const modalDma200 = formatPercentMetric(s.dist_200_dma_pct);
+                const modalRet1m = formatPercentMetric(s.returns && s.returns['1m']);
+                const modalRet1y = formatPercentMetric(s.returns && s.returns['1y']);
+
                 let whyBuyHtml = (thesis.why_buy || []).map(b => `<li>✔ ${b}</li>`).join('');
                 let whyNotHtml = (thesis.why_not_buy || []).map(r => `<li>⚠ ${r}</li>`).join('');
 
@@ -1222,7 +1279,7 @@
                         </div>
                         <div style="text-align:right;">
                             <div style="font-size:1.6rem; font-weight:900; font-family:var(--font-mono); color:#fff;">₹${s.current_price.toLocaleString()}</div>
-                            <div style="font-size:0.85rem; font-weight:700; color:${s.day_change_pct >= 0 ? 'var(--accent-emerald)' : 'var(--accent-rose)'};">${s.day_change_pct >= 0 ? '+' : ''}${s.day_change_pct}% (₹${s.day_change_inr})</div>
+                            <div style="font-size:0.85rem; font-weight:700; color:${modalChg.color};">${modalChg.fullText}</div>
                         </div>
                     </div>
 
@@ -1314,9 +1371,9 @@
                             <div style="font-weight:700; color:var(--accent-cyan); font-size:0.85rem; margin-bottom:0.5rem;">📈 Technical Indicators</div>
                             <div style="font-size:0.80rem; color:var(--text-muted); line-height:1.6;">
                                 52W Range: <strong>₹${s.low_52w} - ₹${s.high_52w}</strong><br>
-                                50-DMA: <strong>₹${s.dma_50}</strong> (${s.dist_50_dma_pct >= 0 ? '+' : ''}${s.dist_50_dma_pct}%)<br>
-                                200-DMA: <strong>₹${s.dma_200}</strong> (${s.dist_200_dma_pct >= 0 ? '+' : ''}${s.dist_200_dma_pct}%)<br>
-                                1M Return: <strong>${s.returns['1m']}%</strong> | 1Y: <strong>${s.returns['1y']}%</strong>
+                                50-DMA: <strong>₹${s.dma_50}</strong> (<span style="color:${modalDma50.color}; font-weight:700;">${modalDma50.text}</span>)<br>
+                                200-DMA: <strong>₹${s.dma_200}</strong> (<span style="color:${modalDma200.color}; font-weight:700;">${modalDma200.text}</span>)<br>
+                                1M Return: <span style="color:${modalRet1m.color}; font-weight:700;">${modalRet1m.text}</span> | 1Y: <span style="color:${modalRet1y.color}; font-weight:700;">${modalRet1y.text}</span>
                             </div>
                         </div>
 
