@@ -13,9 +13,15 @@ fail gracefully and log warnings instead of crashing.
 import logging
 import time
 from datetime import date, datetime
+import logging
+import time
+from datetime import date, datetime
 from typing import Dict, Any, List, Optional
 
-import requests
+try:
+    from curl_cffi import requests as cffi_requests
+except ImportError:
+    import requests as cffi_requests
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -24,26 +30,30 @@ logger = logging.getLogger(__name__)
 class NseClient:
     """
     Fetches real data from NSE India's internal API endpoints.
-    Handles session/cookie management automatically.
+    Handles session/cookie management and TLS fingerprinting automatically.
     """
 
     BASE_URL = "https://www.nseindia.com"
     MAX_RETRIES = 3
-    RETRY_BACKOFF_SECONDS = 5
+    RETRY_BACKOFF_SECONDS = 3
 
-    def __init__(self, rate_limit_seconds: float = 3.0):
+    def __init__(self, rate_limit_seconds: float = 1.5):
         self.rate_limit_seconds = rate_limit_seconds
         self._last_request_time: float = 0.0
-        self._session: Optional[requests.Session] = None
+        self._session: Optional[Any] = None
 
-    def _get_session(self) -> requests.Session:
+    def _get_session(self) -> Any:
         """Create or return an authenticated NSE session with cookies."""
         if self._session is not None:
             return self._session
 
-        session = requests.Session()
+        try:
+            session = cffi_requests.Session(impersonate="chrome124")
+        except Exception:
+            session = cffi_requests.Session()
+
         session.headers.update({
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36",
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36",
             "Accept": "application/json, text/plain, */*",
             "Accept-Language": "en-US,en;q=0.9",
             "Accept-Encoding": "gzip, deflate, br",
@@ -97,13 +107,8 @@ class NseClient:
                     session = self._get_session()
                 else:
                     logger.warning(f"[NSE] HTTP {resp.status_code} for {endpoint} (attempt {attempt}/{self.MAX_RETRIES})")
-            except requests.exceptions.Timeout:
-                logger.warning(f"[NSE] Timeout for {endpoint} (attempt {attempt}/{self.MAX_RETRIES})")
-            except requests.exceptions.ConnectionError:
-                logger.warning(f"[NSE] Connection error for {endpoint} (attempt {attempt}/{self.MAX_RETRIES})")
             except Exception as e:
-                logger.error(f"[NSE] Unexpected error for {endpoint}: {e}")
-                return None
+                logger.warning(f"[NSE] Request error for {endpoint} (attempt {attempt}/{self.MAX_RETRIES}): {e}")
 
             if attempt < self.MAX_RETRIES:
                 backoff = self.RETRY_BACKOFF_SECONDS * attempt
