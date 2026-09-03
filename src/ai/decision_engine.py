@@ -151,8 +151,67 @@ class DecisionEngine:
                 f"Macro: NEUTRAL — India VIX {india_vix:.1f}. Selective allocation only."
             ) if india_vix else "Macro: NEUTRAL — Selective allocation only."
 
-        # 9 Fundamental Multibagger Discovery Questions Evaluation
+        # ── Deep Multibagger Engines Integration (Enriched Research Layer) ──
+        from src.analytics.tam_engine import ReverseTAMHurdleEngine
+        from src.analytics.latent_upside_engine import LatentUpsideEngine
+        from src.analytics.earnings_acceleration import EarningsAccelerationEngine
+        from src.analytics.roic_engine import EconomicROICEngine
+        from src.analytics.reinvestment_calculator import ReinvestmentCalculator
+
+        # 1. Reverse-Engineered 10x TAM Hurdle
+        mcap_val = current_price * (m.get("share_count") or (current_price * 10000000 / max(1, current_price))) / 10000000.0 if current_price else 1000.0
+        # If market cap calculation from raw shares unavailable, estimate from turnover / revenue
+        rev_val = m.get("ttm_revenue_cr") or 1000.0
+        pat_val = m.get("ttm_pat_cr") or (rev_val * 0.10)
+        tam_info = ReverseTAMHurdleEngine.resolve_industry_tam(symbol, sector_name)
+        tam_hurdle = ReverseTAMHurdleEngine.evaluate_10x_reverse_hurdle(
+            current_market_cap_cr=max(100.0, (m.get("trailing_pe") or 25.0) * pat_val),
+            current_revenue_cr=rev_val,
+            current_pat_cr=pat_val,
+            industry_niche_tam_cr=tam_info["niche_tam_cr"],
+            industry_macro_tam_cr=tam_info["macro_tam_cr"],
+            terminal_pe_multiple=28.0,
+            terminal_net_margin_pct=12.0
+        )
+
+        # 2. Latent Upside Map (Distance to Excellence)
         roce_val = m.get("ttm_roce_pct") or 15.0
+        latent_map = LatentUpsideEngine.calculate_latent_upside_map(
+            current_revenue_cr=rev_val,
+            current_ebit_cr=m.get("ttm_ebit_cr") or (rev_val * 0.15),
+            current_pat_cr=pat_val,
+            current_market_cap_cr=tam_hurdle["current_market_cap_cr"],
+            current_roce_pct=roce_val,
+            current_capacity_utilization_pct=65.0,
+            sector_top_quartile_opm_pct=18.0,
+            sector_top_quartile_roce_pct=28.0
+        )
+
+        # 3. Economic ROIC
+        econ_roic = EconomicROICEngine.calculate_economic_roic(
+            ebit_cr=m.get("ttm_ebit_cr") or (rev_val * 0.15),
+            tax_rate_pct=25.0,
+            net_worth_cr=m.get("net_worth_cr") or (rev_val * 0.5),
+            borrowings_cr=m.get("total_debt_cr") or (rev_val * 0.2),
+            cash_and_equivalents_cr=m.get("cash_and_equivalents_cr") or 0.0
+        )
+
+        # 4. Growth vs Maintenance CapEx Breakdown
+        capex_breakdown = ReinvestmentCalculator.calculate_growth_vs_maintenance_capex(
+            total_capex_cr=m.get("ttm_capex_cr") or (rev_val * 0.08),
+            depreciation_cr=m.get("ttm_depreciation_cr") or (rev_val * 0.04),
+            sales_current_cr=rev_val,
+            sales_previous_cr=rev_val * 0.85
+        )
+
+        growth_reinvest = ReinvestmentCalculator.calculate_growth_reinvestment_rate(
+            growth_capex_cr=capex_breakdown["growth_capex_cr"],
+            delta_working_capital_cr=rev_val * 0.03,
+            nopat_cr=econ_roic["nopat_cr"],
+            incremental_roic_pct=econ_roic["economic_roic_pct"]
+        )
+
+        # 9 Fundamental Multibagger Discovery Questions Evaluation
         fcf_y = m.get("ttm_fcf_yield_pct") or 2.5
         pe_str = f"{pe_val:.1f}x" if pe_val else "Moderate"
 
@@ -160,17 +219,29 @@ class DecisionEngine:
             "q1_could_become_2x": {
                 "question": "Could this become a 2×?",
                 "assessment": f"High Probability ({lt_score}/100 Conviction Score)" if lt_score >= 75 else "Moderate Probability",
-                "score": lt_score
+                "score": lt_score,
+                "latent_operational_upside": f"{latent_map['operational_leverage_multiplier']}x earnings capacity"
             },
             "q2_could_become_5x": {
                 "question": "Could this become a 5×?",
-                "assessment": "Strong Tail Potential (ROCE > 20% + FCF Conversion)" if roce_val >= 20.0 and fcf_y > 2.0 else "Requires Sustained Growth Acceleration",
-                "score": round(lt_score * 0.85, 1)
+                "assessment": (
+                    f"Strong Tail Potential (Economic ROIC {econ_roic['economic_roic_pct']}% + {growth_reinvest['reinvestment_posture']})"
+                    if econ_roic["economic_roic_pct"] >= 20.0 and fcf_y > 1.5
+                    else "Requires Sustained Growth Acceleration"
+                ),
+                "score": round(lt_score * 0.85, 1),
+                "compounding_ceiling": f"{growth_reinvest['organic_compounding_ceiling_pct']}% p.a." if growth_reinvest['organic_compounding_ceiling_pct'] else "N/A"
             },
             "q3_could_become_10x": {
                 "question": "Could this become a 10×?",
-                "assessment": "Extreme Outlier Candidate (Capital Reinvestment Runway)" if lt_score >= 85 and daily_turnover_cr < 100 else "Standard Quality Compounder (Not 10x Scale)",
-                "score": round(lt_score * 0.65, 1)
+                "assessment": (
+                    f"{tam_hurdle['feasibility']}: Requires {tam_hurdle['required_niche_market_share_pct']}% niche share ({tam_hurdle['required_macro_market_share_pct']}% macro share)"
+                    if tam_hurdle["is_10x_plausible"]
+                    else f"Mathematically Constrained (Requires {tam_hurdle['required_niche_market_share_pct']}% market share)"
+                ),
+                "is_10x_plausible": tam_hurdle["is_10x_plausible"],
+                "score": round(lt_score * 0.65, 1) if tam_hurdle["is_10x_plausible"] else 30.0,
+                "tam_narrative": tam_hurdle["narrative"]
             },
             "q4_are_we_early": {
                 "question": "Are we early?",
@@ -179,7 +250,11 @@ class DecisionEngine:
             },
             "q5_why_could_it_happen": {
                 "question": "Why could it happen?",
-                "drivers": why_buy[:3] if why_buy else ["Strong balance sheet and sustained reinvestment moat."]
+                "drivers": (
+                    [f"[Long-Term] {latent_map['latent_narrative']}"] +
+                    ([f"[Growth CapEx] {capex_breakdown['growth_capex_share_pct']}% of CapEx dedicated to pure capacity growth."] if capex_breakdown['growth_capex_share_pct'] > 50 else []) +
+                    (why_buy[:2] if why_buy else ["Strong balance sheet and sustained reinvestment moat."])
+                )[:3]
             },
             "q6_what_could_invalidate_it": {
                 "question": "What could invalidate it?",
@@ -196,7 +271,7 @@ class DecisionEngine:
             "q9_what_would_make_us_wrong": {
                 "question": "What would make us wrong?",
                 "invalidation_criteria": [
-                    "ROCE deteriorates below 15% across two consecutive quarters",
+                    f"Economic ROIC deteriorates below 15.0% across two consecutive quarters",
                     "CFO / PAT divergence exceeds 40% (working capital leakage)",
                     "Weekly close below the 200-day moving average"
                 ]

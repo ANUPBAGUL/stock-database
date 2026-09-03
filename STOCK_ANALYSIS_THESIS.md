@@ -197,14 +197,88 @@ To make the system self-learning:
      * `EARNINGS_COLLAPSE`
      * `GOVERNANCE_BREACH`
      * `MACRO_REGIME_DRAG`
-   * This feedback loop refines scoring weights and invalidation thresholds across the platform.
+---
+
+## Layer 9: The 7 Deep Multibagger Analytical Engines
+
+To elevate the system from a screening database into an institutional predictive discovery engine, the architecture implements 7 advanced quantitative modules:
+
+```
+                 COMPANY AUDITED LINEAGE
+                            │
+        ┌───────────────────┼───────────────────┐
+        ▼                   ▼                   ▼
+┌───────────────┐   ┌───────────────┐   ┌───────────────┐
+│ ECONOMIC ROIC │   │  GROWTH CAPEX │   │  ACCELERATION │
+│ & INCREMENTAL │   │ & REINVESTMENT│   │    VECTOR     │
+├───────────────┤   ├───────────────┤   ├───────────────┤
+│ • NOPAT / IC  │   │ • Bruce       │   │ • 2nd-Deriv   │
+│ • 3Y Rolling  │   │   Greenwald   │   │   ΔYoY Growth │
+│   ROIIC       │   │ • Clamped     │   │ • Revenue,    │
+│ • Trajectory  │   │   Maintenance │   │   EBIT, EPS   │
+└───────────────┘   └───────────────┘   └───────────────┘
+        │                   │                   │
+        └───────────────────┼───────────────────┘
+                            ▼
+        ┌───────────────────────────────────────┐
+        │   CONTINUOUS 6D LIFECYCLE VECTORS     │
+        │   [Scale, ROIC_Δ, Margins, Float_Dis] │
+        └───────────────────────────────────────┘
+                            │
+        ┌───────────────────┴───────────────────┐
+        ▼                                       ▼
+┌───────────────┐                       ┌───────────────┐
+│ REVERSE 10×   │                       │ LATENT UPSIDE │
+│ TAM HURDLE    │                       │  MAP (DIST.   │
+├───────────────┤                       │ TO EXCELLENCE)│
+│ • Solves Req. │                       ├───────────────┤
+│   Niche Share │                       │ • Margin Gap  │
+│ • Absurdity   │                       │ • Oper. Lev.  │
+│   Bounds      │                       │ • Upside Mult.│
+└───────────────┘                       └───────────────┘
+```
+
+1. **Economic ROIC & 3-Year Rolling Incremental ROIIC (`roic_engine.py`):**
+   * $\text{Invested Capital} = \text{Net Fixed Assets} + \text{Net Working Capital} - \text{Excess Cash}$
+   * $\text{Economic ROIC} = \frac{\text{NOPAT}}{\text{Invested Capital}}$
+   * $\text{Incremental ROIIC}_{3\text{Y}} = \frac{\Delta\text{NOPAT}_{3\text{Y}}}{\Delta\text{Invested Capital}_{3\text{Y}}}$ with denominator threshold safeguards against small $\Delta IC$ blowups.
+
+2. **Growth vs. Maintenance CapEx (`reinvestment_calculator.py`):**
+   * Bruce Greenwald Columbia Business School Model with depreciation-inflation clamping:
+     $$\text{Maintenance CapEx} = \text{Clamp}\Big(\text{Depr} \times (1 + \text{Inflation}), \; 0.70 \times \text{Depr}, \; 1.30 \times \text{Depr}\Big)$$
+     $$\text{Growth Reinvestment Rate} = \frac{\text{Growth CapEx} + \Delta\text{Working Capital}}{\text{NOPAT}}$$
+
+3. **Hierarchical Reverse-Engineered 10× TAM Hurdle (`tam_engine.py`):**
+   * Solves for required terminal PAT, Revenue, and Market Share in direct sub-niche TAM vs macro industry TAM (*Expectations Investing* framework).
+   * Flags feasibility bounds: `<15% TAM (Plausible)`, `15-35% (Stretch)`, `>50% (Mathematically Absurd)`.
+
+4. **Seasonality-Immune Second-Derivative Earnings Acceleration (`earnings_acceleration.py`):**
+   * $\text{Acceleration} = \text{YoY Growth}_{Q0} - \text{YoY Growth}_{Q-1}$ across Revenue, EBIT, PAT, and OPM.
+
+5. **Institutional Ownership Velocity & Dilution Registry (`ownership_velocity.py`):**
+   * Quarterly accumulation speed ($\Delta\text{FII}_Q + \Delta\text{DII}_Q$) and flags QIPs, Warrants, and ESOP dilution.
+
+6. **Continuous 6D Lifecycle Coordinates (`lifecycle_classifier.py`):**
+   * Continuous normalized coordinate vector tracking real-time stage transitions.
+
+7. **Latent Upside Map / Distance to Excellence (`latent_upside_engine.py`):**
+   * Models the Operational Leverage Multiplier if capacity utilization and operating margins reach top-quartile sector excellence.
+
+---
+
+## Scientific Experiment Isolation: The EXP-004 Freeze
+
+> [!IMPORTANT]
+> **Zero Live Parameter Tampering:**  
+> During the active prospective testing window of **EXP-004**, **Model M6 conviction weights remain 100% frozen**. The 7 new analytical engines enrich the feature store without altering M6 predictions. Failure diagnostics are recorded to an immutable research dataset to be analyzed **only after EXP-004 concludes** to train **Model M7**.
 
 ---
 
 ## Verification & Test Standard
 
-The entire pipeline is validated through automated integration suites:
+The entire pipeline is validated through automated test suites:
 * `tests/test_clean_data_pipeline.py`: Verifies zero-proxy ingestion across Screener, BSE, NSE, and Macro feeds.
 * `tests/test_data_truth_audit.py`: Verifies consistency enforcer, disaggregated debt, and triple timestamps.
 * `tests/test_pit_truth_database.py`: Verifies decay half-life, PIT lookups, and failure diagnostics.
-* **Current Status:** `29/29 Tests Passing (100% Success)`.
+* `tests/test_multibagger_deep_engines.py`: Verifies ROIC, Greenwald CapEx, 10x TAM solve, Acceleration, and Latent Upside.
+* **Current Status:** `38/38 Tests Passing (100% Success)`.

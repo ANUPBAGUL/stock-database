@@ -107,7 +107,80 @@ class LifecycleClassifier:
             "roce_pct": roce_pct,
             "revenue_growth_yoy_pct": revenue_growth_yoy_pct,
             "institutional_stake_pct": institutional_stake_pct,
-            "stage_confidence": 1.00
+            "stage_confidence": 1.00,
+            "lifecycle_coordinates": cls.calculate_continuous_lifecycle_coordinates(
+                market_cap_cr=market_cap_cr,
+                revenue_growth_yoy_pct=revenue_growth_yoy_pct,
+                pat_growth_yoy_pct=pat_growth_yoy_pct,
+                roce_pct=roce_pct,
+                institutional_stake_pct=institutional_stake_pct,
+                pe_ratio=pe_ratio
+            )
+        }
+
+    @staticmethod
+    def calculate_continuous_lifecycle_coordinates(
+        market_cap_cr: float,
+        revenue_growth_yoy_pct: float,
+        pat_growth_yoy_pct: float,
+        roce_pct: float,
+        institutional_stake_pct: float,
+        pe_ratio: float,
+        growth_reinvestment_rate_pct: float = 50.0
+    ) -> Dict[str, Any]:
+        """
+        Computes the continuous 6D normalized coordinate space (0.0 to 1.0)
+        to track real-time stage transitions rather than static discrete labels.
+        """
+        # 1. Scale Coordinate (Log-normalized from ₹100 Cr to ₹500,000 Cr)
+        import math
+        mcap = max(10.0, market_cap_cr)
+        scale_coord = min(1.0, max(0.0, (math.log10(mcap) - 2.0) / 3.7))
+
+        # 2. Growth Reinvestment Intensity (0 to 1.0)
+        reinvest_coord = min(1.0, max(0.0, growth_reinvestment_rate_pct / 100.0))
+
+        # 3. Capital Efficiency (ROIC / ROCE normalized to 50%)
+        efficiency_coord = min(1.0, max(0.0, roce_pct / 50.0))
+
+        # 4. Operating Leverage Multiplier (PAT Growth vs Revenue Growth)
+        rev_g = max(1.0, revenue_growth_yoy_pct)
+        pat_g = max(0.0, pat_growth_yoy_pct)
+        op_lev_ratio = round(pat_g / rev_g, 2)
+        op_lev_coord = min(1.0, max(0.0, (op_lev_ratio - 0.5) / 2.5))
+
+        # 5. Institutional Float Discovery (0% to 50%)
+        inst_coord = min(1.0, max(0.0, institutional_stake_pct / 50.0))
+
+        # 6. Valuation Rerating Percentile (P/E 10x to 80x)
+        pe = max(5.0, pe_ratio)
+        val_coord = min(1.0, max(0.0, (pe - 10.0) / 70.0))
+
+        # State Transition Velocity vector
+        transition_signature = "STABLE_COORDINATES"
+        if op_lev_coord >= 0.5 and inst_coord < 0.5 and efficiency_coord >= 0.5:
+            transition_signature = "EARLY_TO_OPERATING_LEVERAGE_INFLECTION"
+        elif inst_coord >= 0.4 and val_coord > 0.6:
+            transition_signature = "INSTITUTIONAL_RERATING_EXPANSION"
+        elif scale_coord > 0.8 and reinvest_coord < 0.3:
+            transition_signature = "MATURE_CASH_COW_PLATEAU"
+
+        return {
+            "scale_coordinate": round(scale_coord, 3),
+            "reinvestment_intensity_coordinate": round(reinvest_coord, 3),
+            "capital_efficiency_coordinate": round(efficiency_coord, 3),
+            "operating_leverage_coordinate": round(op_lev_coord, 3),
+            "institutional_discovery_coordinate": round(inst_coord, 3),
+            "valuation_rerating_coordinate": round(val_coord, 3),
+            "transition_signature": transition_signature,
+            "coordinate_vector": [
+                round(scale_coord, 2),
+                round(reinvest_coord, 2),
+                round(efficiency_coord, 2),
+                round(op_lev_coord, 2),
+                round(inst_coord, 2),
+                round(val_coord, 2)
+            ]
         }
 
     @classmethod

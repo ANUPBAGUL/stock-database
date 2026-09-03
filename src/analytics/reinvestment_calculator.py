@@ -123,3 +123,80 @@ class ReinvestmentCalculator:
         db.commit()
         logger.info(f"Computed {len(results)} incremental reinvestment periods for company {company_id}.")
         return results
+
+    @staticmethod
+    def calculate_growth_vs_maintenance_capex(
+        total_capex_cr: float,
+        depreciation_cr: float,
+        sales_current_cr: float,
+        sales_previous_cr: float,
+        gross_block_cr: Optional[float] = None,
+        inflation_rate_pct: float = 6.0,
+    ) -> Dict[str, Any]:
+        """
+        Bruce Greenwald Columbia Model with Real-World Depreciation Clamping Safeguards:
+        
+        1. PPE/Sales Ratio = Gross Block / Current Sales (or 0.85 default if unprovided)
+        2. Raw Growth CapEx = (PPE/Sales) * max(0.0, Sales_Current - Sales_Previous)
+        3. Maintenance CapEx Baseline = Depreciation * (1 + Inflation)
+        4. Clamping Safeguard: Maintenance CapEx is bounded between [0.70 * Depr, 1.30 * Depr]
+        5. Growth CapEx = max(0.0, Total CapEx - Maintenance CapEx)
+        """
+        depr = max(0.1, depreciation_cr)
+        capex = max(0.0, total_capex_cr)
+        delta_sales = max(0.0, sales_current_cr - sales_previous_cr)
+
+        # Baseline Maintenance CapEx with inflation adjustment
+        inflation_mult = 1.0 + (inflation_rate_pct / 100.0)
+        baseline_maint = depr * inflation_mult
+
+        # Clamp maintenance capex to realistic boundaries
+        maint_capex = min(capex, max(0.70 * depr, min(1.30 * depr, baseline_maint)))
+        
+        # Growth CapEx is the genuine capacity expansion
+        growth_capex = max(0.0, round(capex - maint_capex, 2))
+        maint_capex = round(maint_capex, 2)
+
+        growth_share_pct = round((growth_capex / max(0.1, capex)) * 100.0, 1) if capex > 0 else 0.0
+
+        return {
+            "total_capex_cr": capex,
+            "maintenance_capex_cr": maint_capex,
+            "growth_capex_cr": growth_capex,
+            "growth_capex_share_pct": growth_share_pct,
+            "maintenance_depr_coverage_ratio": round(maint_capex / depr, 2),
+            "methodology": "GREENWALD_DEPRECIATION_CLAMPED"
+        }
+
+    @staticmethod
+    def calculate_growth_reinvestment_rate(
+        growth_capex_cr: float,
+        delta_working_capital_cr: float,
+        nopat_cr: float,
+        incremental_roic_pct: Optional[float] = None,
+    ) -> Dict[str, Any]:
+        """
+        Computes True Growth Reinvestment Rate and Organic Compounding Ceiling:
+        Growth Reinvestment Rate = (Growth CapEx + Delta Working Capital) / NOPAT
+        Compounding Ceiling = Growth Reinvestment Rate * Incremental ROIC
+        """
+        nopat = max(1.0, nopat_cr)
+        growth_capital_deployed = growth_capex_cr + max(0.0, delta_working_capital_cr)
+        reinvest_rate_pct = round((growth_capital_deployed / nopat) * 100.0, 2)
+
+        # Organic compounding capacity
+        compounding_ceiling_pct = None
+        if incremental_roic_pct is not None and incremental_roic_pct > 0:
+            compounding_ceiling_pct = round((reinvest_rate_pct / 100.0) * incremental_roic_pct, 2)
+
+        return {
+            "growth_reinvestment_rate_pct": reinvest_rate_pct,
+            "growth_capital_deployed_cr": round(growth_capital_deployed, 2),
+            "organic_compounding_ceiling_pct": compounding_ceiling_pct,
+            "reinvestment_posture": (
+                "AGGRESSIVE_EXPANSION" if reinvest_rate_pct > 70.0 else
+                "BALANCED_COMPOUNDER" if reinvest_rate_pct >= 30.0 else
+                "CASH_DISTRIBUTOR"
+            )
+        }
+
