@@ -24,7 +24,7 @@ from typing import Dict, Any, Optional, List, Tuple
 from sqlalchemy.orm import Session
 from src.analytics.bitemporal_query import BitemporalQueryEngine
 from src.analytics.price_adjuster import PriceAdjuster
-from src.db.models import DailyPriceRaw
+from src.db.models import DailyPriceRaw, Company
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -60,6 +60,7 @@ class FeatureEngine:
         financials = BitemporalQueryEngine.get_financials_as_of(
             db, company_id, as_of_datetime, period_type="QUARTERLY", limit=8
         )
+        recent_4_q = financials[:4] if financials else []
 
         if len(financials) >= 1:
             q0 = financials[0] # Most recent filing available at date T
@@ -132,6 +133,7 @@ class FeatureEngine:
             cash = q0.cash_and_equivalents or 0.0
 
             ce_q0 = None
+            ce_q4 = None
             if total_assets > 0 and total_assets > current_liab:
                 ce_q0 = total_assets - current_liab
             elif (net_worth + total_debt) > 0:
@@ -140,31 +142,53 @@ class FeatureEngine:
             # If Q0 has no balance sheet (intermediate quarter), find the most recent audited BS filing
             roce_methodology = "PERIOD_AVERAGE_CE"
             if ce_q0 is None:
-                for f in financials[1:]:
-                    ta = f.total_assets or 0.0
-                    cl = getattr(f, 'current_liabilities', None) or 0.0
-                    nw = f.net_worth or 0.0
-                    td = f.total_debt or 0.0
+                # Query annual/semi-annual audited filings for authentic balance sheet primitives
+                annual_filings = BitemporalQueryEngine.get_financials_as_of(
+                    db, company_id, as_of_datetime, period_type="ANNUAL", limit=4
+                )
+                if annual_filings:
+                    f0 = annual_filings[0]
+                    ta = f0.total_assets or 0.0
+                    cl = getattr(f0, 'current_liabilities', None) or getattr(f0, 'total_liabilities', None) or 0.0
+                    nw = f0.net_worth or 0.0
+                    td = f0.total_debt or 0.0
+                    net_worth = nw
+                    total_debt = td
+                    cash = f0.cash_and_equivalents or 0.0
                     if ta > 0 and ta > cl:
                         ce_q0 = ta - cl
-                        total_assets = ta
-                        current_liab = cl
-                        net_worth = nw
-                        total_debt = td
-                        cash = f.cash_and_equivalents or 0.0
                         roce_methodology = "LAST_AUDITED_BS"
-                        break
                     elif (nw + td) > 0:
                         ce_q0 = nw + td
-                        net_worth = nw
-                        total_debt = td
-                        cash = f.cash_and_equivalents or 0.0
                         roce_methodology = "LAST_AUDITED_BS"
-                        break
 
-            # Fetch Q-4 (1-year ago) balance sheet for period-average CE
-            ce_q4 = None
-            if len(financials) >= 5:
+                    if len(annual_filings) >= 2:
+                        f1 = annual_filings[1]
+                        ta1 = f1.total_assets or 0.0
+                        cl1 = getattr(f1, 'current_liabilities', None) or getattr(f1, 'total_liabilities', None) or 0.0
+                        nw1 = f1.net_worth or 0.0
+                        td1 = f1.total_debt or 0.0
+                        if ta1 > 0 and ta1 > cl1:
+                            ce_q4 = ta1 - cl1
+                        elif (nw1 + td1) > 0:
+                            ce_q4 = nw1 + td1
+                else:
+                    for f in financials[1:]:
+                        ta = f.total_assets or 0.0
+                        cl = getattr(f, 'current_liabilities', None) or 0.0
+                        nw = f.net_worth or 0.0
+                        td = f.total_debt or 0.0
+                        if ta > 0 and ta > cl:
+                            ce_q0 = ta - cl
+                            roce_methodology = "LAST_AUDITED_BS"
+                            break
+                        elif (nw + td) > 0:
+                            ce_q0 = nw + td
+                            roce_methodology = "LAST_AUDITED_BS"
+                            break
+
+            # Fetch Q-4 (1-year ago) balance sheet for period-average CE if not already set from annual filings
+            if ce_q4 is None and len(financials) >= 5:
                 q4_filing = financials[4]
                 ta4 = q4_filing.total_assets or 0.0
                 cl4 = getattr(q4_filing, 'current_liabilities', None) or 0.0
@@ -271,35 +295,43 @@ class FeatureEngine:
 
             # Valuation metrics using real price and shares
             shares = features.get("shares_outstanding")
+            if not shares or shares <= 0:
+                annual_bs = BitemporalQueryEngine.get_financials_as_of(
+                    db, company_id, as_of_datetime, period_type="ANNUAL", limit=1
+                )
+                if annual_bs:
+                    f0 = annual_bs[0]
+                    eq_cap = getattr(f0, "equity_share_capital", None) or getattr(f0, "equity_capital", None) or getattr(f0, "net_worth", None)
+                    if eq_cap and eq_cap > 0:
+                        comp_row = db.query(Company).filter_by(company_id=company_id).first()
+                        fv = getattr(comp_row, "face_value", 10.0) or 10.0
+                        shares = (eq_cap * 10_000_000.0) / fv
+                        features["shares_outstanding"] = shares
+
+            # TTM EPS from trailing 4 quarters
+            ttm_eps = sum(q.eps for q in recent_4_q if q.eps is not None) if recent_4_q else None
+
             if shares and shares > 0 and current_close:
-                # Market Cap in Crores = (Close * Shares) / 10,000,000
                 mcap_cr = (current_close * shares) / 10_000_000.0
-                
-                # Sanity guard: mcap should be reasonable relative to revenue
-                # If mcap < 0.1x TTM revenue, likely data quality issue (wrong shares unit, stale price, etc.)
-                ttm_revenue = features.get("ttm_revenue")
-                if ttm_revenue and ttm_revenue > 0 and mcap_cr < (ttm_revenue * 0.1):
-                    logger.warning(
-                        f"[FeatureEngine] {company_id} mcap_cr={mcap_cr:.2f} Cr implausibly small "
-                        f"(< 0.1x TTM revenue {ttm_revenue:.2f} Cr). Nullifying mcap/PE/PB."
-                    )
-                    features["market_cap_crores"] = None
-                    features["pe_ratio"] = None
-                    features["pb_ratio"] = None
+                features["market_cap_crores"] = round(mcap_cr, 2)
+
+                ttm_pat = features.get("ttm_pat")
+                if ttm_pat and ttm_pat > 0:
+                    features["pe_ratio"] = round(mcap_cr / ttm_pat, 2)
+                elif ttm_eps and ttm_eps > 0:
+                    features["pe_ratio"] = round(current_close / ttm_eps, 2)
                 else:
-                    features["market_cap_crores"] = round(mcap_cr, 2)
+                    features["pe_ratio"] = None
 
-                    ttm_pat = features.get("ttm_pat")
-                    if ttm_pat and ttm_pat > 0:
-                        features["pe_ratio"] = round(mcap_cr / ttm_pat, 2)
-                    else:
-                        features["pe_ratio"] = None
-
-                    net_worth = financials[0].net_worth if financials and financials[0].net_worth else None
-                    if net_worth and net_worth > 0:
-                        features["pb_ratio"] = round(mcap_cr / net_worth, 2)
-                    else:
-                        features["pb_ratio"] = None
+                net_worth_val = net_worth if net_worth > 0 else (financials[0].net_worth if financials and financials[0].net_worth else None)
+                if net_worth_val and net_worth_val > 0:
+                    features["pb_ratio"] = round(mcap_cr / net_worth_val, 2)
+                else:
+                    features["pb_ratio"] = None
+            elif current_close and ttm_eps and ttm_eps > 0:
+                features["pe_ratio"] = round(current_close / ttm_eps, 2)
+                features["market_cap_crores"] = None
+                features["pb_ratio"] = None
             else:
                 features["market_cap_crores"] = None
                 features["pe_ratio"] = None

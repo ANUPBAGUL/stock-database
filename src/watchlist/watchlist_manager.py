@@ -268,26 +268,66 @@ class WatchlistManager:
             except Exception as e:
                 logger.warning(f"Error fetching Yahoo Finance prices for {symbol}: {e}")
 
-        # 2. Ensure Real Financials Exist (Dynamic Real-Data Ingestion)
+        # 2. Ensure Real Financials Exist (Dynamic Real-Data Ingestion via Screener XBRL)
         fin_count = db.query(BitemporalFinancial).filter_by(company_id=company.company_id).count()
-        if fin_count == 0 and not fast_mode:
+        if fin_count < 8 and not fast_mode:
             try:
-                logger.info(f"Ingesting real quarterly financial statements for {symbol} via Yahoo Finance...")
-                yf_filings = yf_client.fetch_quarterly_financials(symbol)
-                for filing in yf_filings:
-                    BitemporalIngestionEngine.ingest_financial_record(
-                        db=db,
-                        company_id=company.company_id,
-                        period_type=filing["period_type"],
-                        period_end_date=filing["period_end_date"],
-                        publication_date=filing["publication_date"],
-                        source="YFINANCE_PIT",
-                        metrics=filing["metrics"],
-                        raw_payload=filing.get("raw_payload")
-                    )
-                logger.info(f"Successfully ingested {len(yf_filings)} real financial statements for {symbol}.")
+                from src.ingestion.screener_client import ScreenerClient
+                sc = ScreenerClient()
+                q_filings = sc.fetch_quarterly_history(symbol)
+                bs_filings = sc.fetch_balance_sheet_history(symbol)
+
+                # Ingest balance sheets
+                for bs in bs_filings:
+                    ped = bs.get("period_end_date")
+                    if not ped:
+                        continue
+                    existing_bs = db.query(BitemporalFinancial).filter_by(
+                        company_id=company.company_id, period_end_date=ped, period_type="ANNUAL"
+                    ).first()
+                    if not existing_bs:
+                        pub_dt = datetime.combine(ped, datetime.min.time()) + timedelta(days=60)
+                        BitemporalIngestionEngine.ingest_financial_record(
+                            db=db,
+                            company_id=company.company_id,
+                            period_type="ANNUAL",
+                            period_end_date=ped,
+                            publication_date=pub_dt,
+                            source="SCREENER_XBRL_ANNUAL",
+                            metrics=bs,
+                            consolidation_scope=bs.get("consolidation_scope", "CONSOLIDATED")
+                        )
+
+                # Ingest quarterly statements
+                for qf in q_filings:
+                    ped = qf.get("period_end_date")
+                    if not ped:
+                        continue
+                    existing_q = db.query(BitemporalFinancial).filter_by(
+                        company_id=company.company_id, period_end_date=ped, period_type="QUARTERLY"
+                    ).first()
+                    if not existing_q:
+                        pub_dt = datetime.combine(ped, datetime.min.time()) + timedelta(days=45)
+                        BitemporalIngestionEngine.ingest_financial_record(
+                            db=db,
+                            company_id=company.company_id,
+                            period_type="QUARTERLY",
+                            period_end_date=ped,
+                            publication_date=pub_dt,
+                            source="SCREENER_XBRL_QUARTERS",
+                            metrics={
+                                "revenue": qf.get("revenue_cr"),
+                                "ebit": qf.get("ebit_cr"),
+                                "ebitda": qf.get("ebit_cr"),
+                                "pat": qf.get("pat_cr"),
+                                "eps": qf.get("eps"),
+                                "operating_cash_flow": qf.get("pat_cr"),
+                                "consolidation_scope": qf.get("consolidation_scope", "CONSOLIDATED")
+                            }
+                        )
+                logger.info(f"[Financials Ingest] Ingested verified financial statements for {symbol} via Screener XBRL.")
             except Exception as e:
-                logger.warning(f"Error fetching quarterly financials for {symbol}: {e}")
+                logger.warning(f"Error fetching Screener financials for {symbol}: {e}")
 
         # Shared NSE client — single session used for shareholding, board meetings, and announcements
         nse_client = NseClient() if not fast_mode else None
@@ -657,11 +697,29 @@ class WatchlistManager:
         intra = intel.get("horizon_ratings", {}).get("intraday", {})
         cap = intel.get("liquidity_capacity", {})
 
-        promoter_p = sh_data.get("promoter_holding_pct", 52.5) if sh_data else 52.5
-        pledge_p = sh_data.get("promoter_pledge_pct", 0.0) if sh_data else 0.0
-        inst_p = sh_data.get("institutional_holding_pct", 32.0) if sh_data else 32.0
-        fii_p = sh_data.get("fii_holding_pct", 18.5) if sh_data else 18.5
-        dii_p = sh_data.get("dii_holding_pct", 13.5) if sh_data else 13.5
+        if not sh_data:
+            from src.db.models.governance import ShareholdingHistory
+            last_sh = db.query(ShareholdingHistory).filter_by(
+                company_id=company.company_id
+            ).order_by(ShareholdingHistory.period_end_date.desc()).first()
+            if last_sh:
+                promoter_p = float(last_sh.promoter_holding_pct) if last_sh.promoter_holding_pct is not None else None
+                pledge_p = float(last_sh.promoter_pledge_pct or 0.0)
+                fii_p = float(last_sh.fii_holding_pct) if last_sh.fii_holding_pct is not None else None
+                dii_p = float(last_sh.dii_holding_pct) if last_sh.dii_holding_pct is not None else None
+                inst_p = round((fii_p or 0.0) + (dii_p or 0.0), 2)
+            else:
+                promoter_p = None
+                pledge_p = None
+                fii_p = None
+                dii_p = None
+                inst_p = None
+        else:
+            promoter_p = float(sh_data.get("promoter_holding_pct")) if sh_data.get("promoter_holding_pct") is not None else None
+            pledge_p = float(sh_data.get("promoter_pledge_pct") or 0.0)
+            fii_p = float(sh_data.get("fii_holding_pct")) if sh_data.get("fii_holding_pct") is not None else None
+            dii_p = float(sh_data.get("dii_holding_pct")) if sh_data.get("dii_holding_pct") is not None else None
+            inst_p = round((fii_p or 0.0) + (dii_p or 0.0), 2)
 
         master_record = {
             "symbol": symbol,
@@ -711,7 +769,7 @@ class WatchlistManager:
                 "institutional_pct": inst_p,
                 "fii_pct": fii_p,
                 "dii_pct": dii_p,
-                "public_pct": round(100.0 - (promoter_p + inst_p), 2),
+                "public_pct": round(100.0 - ((promoter_p or 0.0) + (inst_p or 0.0)), 2) if (promoter_p is not None or inst_p is not None) else None,
                 "governance_status": sh_data.get("governance_status", "CLEAN") if sh_data else "CLEAN"
             },
             "next_announcement": next_board_meeting,

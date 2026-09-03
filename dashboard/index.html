@@ -799,12 +799,12 @@
                                 </div>
                             </div>
                             <div class="card-metrics-grid">
-                                <div>🧬 <strong>M6 Score:</strong> <span style="color:${m6Color}; font-weight:700;">${s.m6_longterm_score}/100</span></div>
-                                <div>📈 <strong>Swing Setup:</strong> <span style="color:var(--accent-cyan);">${s.swing_setup}</span></div>
-                                <div>⚡ <strong>ROCE:</strong> <span style="color:var(--accent-emerald); font-weight:700;">${s.roce_pct}%</span></div>
-                                <div>📊 <strong>P/E:</strong> <span style="color:var(--accent-amber);">${s.pe_ratio}x</span></div>
-                                <div>🎯 <strong>Target:</strong> <span style="color:var(--accent-emerald);">₹${s.swing_target || '-'}</span></div>
-                                <div>🛑 <strong>Stop Loss:</strong> <span style="color:var(--accent-rose);">₹${s.swing_stop_loss || '-'}</span></div>
+                                <div>🧬 <strong>M6 Score:</strong> <span style="color:${m6Color}; font-weight:700;">${s.m6_longterm_score !== null && s.m6_longterm_score !== undefined ? s.m6_longterm_score + '/100' : 'N/A'}</span></div>
+                                <div>📈 <strong>Swing Setup:</strong> <span style="color:var(--accent-cyan);">${s.swing_setup || 'N/A'}</span></div>
+                                <div>⚡ <strong>ROCE:</strong> <span style="color:var(--accent-emerald); font-weight:700;">${s.roce_pct !== null && s.roce_pct !== undefined ? s.roce_pct + '%' : 'N/A'}</span></div>
+                                <div>📊 <strong>P/E:</strong> <span style="color:var(--accent-amber);">${s.pe_ratio !== null && s.pe_ratio !== undefined ? s.pe_ratio + 'x' : 'N/A'}</span></div>
+                                <div>🎯 <strong>Target:</strong> <span style="color:var(--accent-emerald);">${s.swing_target ? '₹' + s.swing_target : '-'}</span></div>
+                                <div>🛑 <strong>Stop Loss:</strong> <span style="color:var(--accent-rose);">${s.swing_stop_loss ? '₹' + s.swing_stop_loss : '-'}</span></div>
                             </div>
                             <div style="font-size: 0.75rem; color: var(--text-dim); margin-bottom: 0.75rem;">
                                 <strong>Verdict:</strong> <span style="color:var(--accent-emerald); font-weight:700;">${s.primary_verdict}</span> | Sizing: ${s.sizing_guidance}
@@ -968,24 +968,24 @@
                             <div style="font-size:0.68rem; color:var(--text-dim);">50-DMA: ₹${s.dma_50}</div>
                         </td>
                         <td>
-                            <span class="badge-tag badge-purple" style="font-size:0.75rem;">${s.m6_longterm_score}/100</span>
+                            <span class="badge-tag ${s.m6_longterm_score ? 'badge-purple' : 'badge-slate'}" style="font-size:0.75rem;">${s.m6_longterm_score !== null && s.m6_longterm_score !== undefined ? s.m6_longterm_score + '/100' : 'N/A'}</span>
                         </td>
                         <td>
-                            <span style="color:var(--accent-cyan); font-weight:700;">${s.swing_setup}</span>
-                            <div style="font-size:0.68rem; color:var(--accent-emerald);">T: ₹${s.swing_target || '-'}</div>
+                            <span style="color:var(--accent-cyan); font-weight:700;">${s.swing_setup || 'N/A'}</span>
+                            <div style="font-size:0.68rem; color:var(--accent-emerald);">T: ${s.swing_target ? '₹' + s.swing_target : '-'}</div>
                         </td>
                         <td>
                             ${catalystHtml}
                         </td>
-                        <td><strong style="color:var(--accent-emerald); font-family:var(--font-mono);">${s.roce_pct}%</strong></td>
-                        <td><span class="badge-tag badge-amber" style="font-size:0.72rem;">${s.pe_ratio}x</span></td>
+                        <td><strong style="color:var(--accent-emerald); font-family:var(--font-mono);">${s.roce_pct !== null && s.roce_pct !== undefined ? s.roce_pct + '%' : 'N/A'}</strong></td>
+                        <td><span class="badge-tag ${s.pe_ratio ? 'badge-amber' : 'badge-slate'}" style="font-size:0.72rem;">${s.pe_ratio !== null && s.pe_ratio !== undefined ? s.pe_ratio + 'x' : 'N/A'}</span></td>
                         <td>
-                            <strong>${s.shareholding.promoter_pct}%</strong>
-                            <div style="font-size:0.68rem; color:${s.shareholding.promoter_pledge_pct > 0 ? 'var(--accent-rose)' : 'var(--text-dim)'};">Pledge: ${s.shareholding.promoter_pledge_pct}%</div>
+                            <strong>${s.shareholding && s.shareholding.promoter_pct !== null && s.shareholding.promoter_pct !== undefined ? s.shareholding.promoter_pct + '%' : 'N/A'}</strong>
+                            <div style="font-size:0.68rem; color:${s.shareholding && s.shareholding.promoter_pledge_pct > 0 ? 'var(--accent-rose)' : 'var(--text-dim)'};">Pledge: ${s.shareholding ? (s.shareholding.promoter_pledge_pct || 0) : 0}%</div>
                         </td>
                         <td>
-                            <strong style="color:var(--accent-cyan);">₹${s.liquidity.max_safe_position_size_cr} Cr</strong>
-                            <div style="font-size:0.68rem; color:var(--text-dim);">${s.liquidity.avg_daily_volume_20.toLocaleString()} vol</div>
+                            <strong style="color:var(--accent-cyan);">₹${s.liquidity && s.liquidity.max_safe_position_size_cr !== undefined ? s.liquidity.max_safe_position_size_cr : 0} Cr</strong>
+                            <div style="font-size:0.68rem; color:var(--text-dim);">${s.liquidity && s.liquidity.avg_daily_volume_20 ? s.liquidity.avg_daily_volume_20.toLocaleString() : 0} vol</div>
                         </td>
                         <td>
                             <div style="display:flex; gap:0.4rem;">

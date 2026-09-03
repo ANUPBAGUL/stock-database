@@ -71,6 +71,35 @@ class ScreenerClient:
             except Exception as e:
                 logger.debug(f"[Screener] Standalone attempt {attempt+1} failed for {sym_clean}: {e}")
 
+        # 3. Fallback to BSE code or symbol aliases if standard ticker fails
+        aliases = []
+        try:
+            from src.db.base import SessionLocal
+            from src.db.models import Company
+            db = SessionLocal()
+            comp = db.query(Company).filter(
+                (Company.nse_symbol == sym_clean) | (Company.bse_code == sym_clean)
+            ).first()
+            if comp:
+                if comp.bse_code and comp.bse_code != sym_clean:
+                    aliases.append(comp.bse_code)
+                if comp.nse_symbol and comp.nse_symbol != sym_clean:
+                    aliases.append(comp.nse_symbol)
+            db.close()
+        except Exception:
+            pass
+
+        for alias in aliases:
+            for url in [f"{self.BASE_URL}/company/{alias}/consolidated/", f"{self.BASE_URL}/company/{alias}/"]:
+                try:
+                    r = self._session.get(url, headers=self._headers, timeout=15)
+                    if r.status_code == 200:
+                        scope = "CONSOLIDATED" if "/consolidated/" in url else "STANDALONE"
+                        logger.info(f"[Screener] Fetched {scope} financials for {sym_clean} via alias {alias}")
+                        return BeautifulSoup(r.text, "html.parser"), scope
+                except Exception:
+                    pass
+
         logger.warning(f"[Screener] All attempts failed for {sym_clean}")
         return None, "UNAVAILABLE"
 

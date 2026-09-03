@@ -19,6 +19,7 @@ BACKFILL FLAG:
                       "what did the system know at time T?"
 """
 
+import uuid
 import logging
 from datetime import date, datetime
 from typing import Dict, Any, Optional
@@ -91,6 +92,7 @@ class BitemporalIngestionEngine:
             is_restatement = True
 
         new_record = BitemporalFinancial(
+            financial_id=str(uuid.uuid4()),
             company_id=company_id,
             period_type=period_type,
             period_end_date=period_end_date,
@@ -126,7 +128,7 @@ class BitemporalIngestionEngine:
             net_debt=metrics.get("net_debt"),
             # Consolidation and provenance
             consolidation_scope=metrics.get("consolidation_scope", consolidation_scope),
-            raw_payload=raw_payload or metrics
+            raw_payload={k: (v.isoformat() if isinstance(v, (date, datetime)) else v) for k, v in (raw_payload or metrics or {}).items()}
         )
 
         db.add(new_record)
