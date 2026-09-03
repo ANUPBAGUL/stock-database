@@ -91,6 +91,18 @@ class OOSFirewall:
             }
 
     @staticmethod
+    def assert_mutation_allowed(t0_date: date, action: str = "MUTATION"):
+        """
+        Enforces OOS_MUTATION_POLICY = FORBIDDEN for Locked OOS records.
+        """
+        partition = OOSFirewall.get_partition(t0_date)
+        if partition == "LOCKED_OOS":
+            raise PermissionError(
+                f"FORBIDDEN: Mutation action '{action}' on Locked OOS partition ({LOCKED_OOS_VERSION}) is strictly prohibited!"
+            )
+        return True
+
+    @staticmethod
     def assert_oos_immutability(evaluation_state: Dict[str, Any]):
         """
         Verifies that model parameters or feature definitions have not been mutated

@@ -66,6 +66,62 @@ class CompetitivePositionEngine:
         }
 
     @staticmethod
+    def calculate_rigorous_hhi(
+        identified_market_shares: Dict[str, float],
+        n_unidentified_min: int = 1,
+        n_unidentified_max: int = 10
+    ) -> Dict[str, Any]:
+        """
+        Computes the Herfindahl-Hirschman Index with uncertainty bounds for residual unallocated shares:
+        
+        HHI_observed = sum_{i in identified} s_i^2 (on scale 0-10000, where s_i is in 0-100)
+        Residual R = max(0, 100 - sum_{i in identified} s_i)
+        HHI_min = HHI_observed + (R^2 / N_unidentified_max)
+        HHI_max = HHI_observed + (R^2 / N_unidentified_min)
+        """
+        if not identified_market_shares:
+            return {
+                "hhi_observed": 1500.0,
+                "hhi_min": 1500.0,
+                "hhi_max": 1500.0,
+                "identified_share_pct": 0.0,
+                "residual_unidentified_share_pct": 100.0,
+                "market_structure": "FRAGMENTED_COMMODITY"
+            }
+
+        shares = [max(0.0, min(100.0, float(v))) for v in identified_market_shares.values()]
+        sum_identified = sum(shares)
+        if sum_identified > 100.0:
+            shares = [s * (100.0 / sum_identified) for s in shares]
+            sum_identified = 100.0
+
+        hhi_observed = round(sum(s ** 2 for s in shares), 2)
+        residual = round(max(0.0, 100.0 - sum_identified), 2)
+
+        n_min = max(1, n_unidentified_min)
+        n_max = max(n_min, n_unidentified_max)
+
+        hhi_min = round(hhi_observed + ((residual ** 2) / n_max), 2)
+        hhi_max = round(hhi_observed + ((residual ** 2) / n_min), 2)
+
+        # Structure classification on scale [0, 10000]
+        if hhi_observed >= 2500.0 or (hhi_max >= 2500.0 and residual > 0):
+            regime = "CONCENTRATED_OLIGOPOLY"
+        elif hhi_observed >= 1500.0 or (hhi_max >= 1500.0 and residual > 0):
+            regime = "MODERATELY_CONCENTRATED"
+        else:
+            regime = "FRAGMENTED_COMMODITY"
+
+        return {
+            "hhi_observed": hhi_observed,
+            "hhi_min": hhi_min,
+            "hhi_max": hhi_max,
+            "identified_share_pct": round(sum_identified, 2),
+            "residual_unidentified_share_pct": residual,
+            "market_structure": regime
+        }
+
+    @staticmethod
     def calculate_pricing_power_index(
         historical_gross_margins_pct: List[float]
     ) -> Dict[str, Any]:

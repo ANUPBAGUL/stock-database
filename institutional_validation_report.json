@@ -1,0 +1,58 @@
+{
+  "status": "PASS",
+  "timestamp": "2026-09-03T19:02:26.156745Z",
+  "git_commit": "2afdfa5",
+  "database_version": "P0_TRUTH_V3",
+  "test_count": 41,
+  "passed": 41,
+  "failed": 0,
+  "skipped": 0,
+  "execution_time_seconds": 42.32,
+  "invariants": {
+    "A_Vintage_Reconstruction": {
+      "status": "PASS",
+      "evidence": "Verified in test_layer_e_adversarial_leakage.py and test_layer_j_golden_dataset_e2e.py"
+    },
+    "B_Future_Document_Poison": {
+      "status": "PASS",
+      "evidence": "Multi-vintage poison injection leaves canonical hashes bit-for-bit identical"
+    },
+    "C_Restatement_Invariance": {
+      "status": "PASS",
+      "evidence": "Chained multi-auditor restatements isolated by bitemporal validities"
+    },
+    "D_Survivorship_Free_Universe": {
+      "status": "PASS",
+      "evidence": "Historical cohorts preserve defunct/bankrupt firms (DHFL/Sintex/RCom)"
+    },
+    "E_Fold_Boundary_Interval_Purge": {
+      "status": "PASS",
+      "evidence": "Generic half-open intervals [start, end) strictly disjoint across folds"
+    },
+    "F_Machine_Readable_Provenance": {
+      "status": "PASS",
+      "evidence": "All ResearchFeatureSnapshot rows trace to source_fact_ids with published_at <= T0"
+    },
+    "G_Adversarial_Leakage_Canary": {
+      "status": "PASS",
+      "evidence": "Injected synthetic 10x look-ahead variables blocked by extractor"
+    },
+    "H_Deterministic_Canonical_Hash": {
+      "status": "PASS",
+      "evidence": "100-run key permutations produce bit-for-bit identical SHA-256 digests"
+    }
+  },
+  "dataset_health": {
+    "total_companies": 70,
+    "unique_snap_companies": 18,
+    "total_snapshots": 164,
+    "n_effective": 28.0,
+    "total_outcomes": 69,
+    "mature_count": 2,
+    "immature_censored_count": 67,
+    "ten_x_count": 20,
+    "failure_count": 1,
+    "provenance_pct": 59.756097560975604
+  },
+  "failures": []
+}
