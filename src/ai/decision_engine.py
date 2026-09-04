@@ -156,20 +156,86 @@ class DecisionEngine:
             ) if india_vix else "Macro: NEUTRAL — Selective allocation only."
 
         # ── Deep Multibagger Engines Integration (Enriched Research Layer) ──
+        from datetime import datetime
         from src.analytics.tam_engine import ReverseTAMHurdleEngine
         from src.analytics.latent_upside_engine import LatentUpsideEngine
         from src.analytics.earnings_acceleration import EarningsAccelerationEngine
         from src.analytics.roic_engine import EconomicROICEngine
         from src.analytics.reinvestment_calculator import ReinvestmentCalculator
+        from src.analytics.bitemporal_query import BitemporalQueryEngine
+
+        # Extract authentic point-in-time financial primitives
+        as_of_datetime = datetime.combine(as_of_date, datetime.max.time())
+        q_filings = BitemporalQueryEngine.get_financials_as_of(
+            db, company_id, as_of_datetime, period_type="QUARTERLY", limit=8
+        )
+        annual_filings = BitemporalQueryEngine.get_financials_as_of(
+            db, company_id, as_of_datetime, period_type="ANNUAL", limit=4
+        )
+
+        recent_4_q = q_filings[:4] if q_filings else []
+        if len(recent_4_q) >= 1:
+            valid_revs = [q.revenue for q in recent_4_q if q.revenue is not None]
+            valid_pats = [q.pat for q in recent_4_q if q.pat is not None]
+            valid_ebits = [q.ebit for q in recent_4_q if q.ebit is not None]
+            valid_capexs = [q.capex for q in recent_4_q if q.capex is not None]
+            valid_deprs = [q.depreciation for q in recent_4_q if getattr(q, 'depreciation', None) is not None]
+
+            rev_val = (sum(valid_revs) * (4.0 / len(valid_revs))) if valid_revs else 0.0
+            pat_val = (sum(valid_pats) * (4.0 / len(valid_pats))) if valid_pats else 0.0
+            ebit_val = (sum(valid_ebits) * (4.0 / len(valid_ebits))) if valid_ebits else 0.0
+            capex_val = (sum(valid_capexs) * (4.0 / len(valid_capexs))) if valid_capexs else 0.0
+            depr_val = (sum(valid_deprs) * (4.0 / len(valid_deprs))) if valid_deprs else 0.0
+        elif annual_filings:
+            a0 = annual_filings[0]
+            rev_val = a0.revenue or 0.0
+            pat_val = a0.pat or 0.0
+            ebit_val = a0.ebit or 0.0
+            capex_val = a0.capex or 0.0
+            depr_val = a0.depreciation or 0.0
+        else:
+            rev_val = 0.0
+            pat_val = 0.0
+            ebit_val = 0.0
+            capex_val = 0.0
+            depr_val = 0.0
+
+        latest_bs = (
+            next((f for f in q_filings if (f.net_worth or f.total_debt or f.total_assets)), None)
+            or (annual_filings[0] if annual_filings else None)
+        )
+        prior_bs = (
+            next((f for f in q_filings[4:] if (f.net_worth or f.total_debt or f.total_assets)), None)
+            or (annual_filings[1] if len(annual_filings) > 1 else None)
+        )
+
+        net_worth_val = latest_bs.net_worth if latest_bs and latest_bs.net_worth else 0.0
+        borrowings_val = latest_bs.total_debt if latest_bs and latest_bs.total_debt else 0.0
+        cash_val = latest_bs.cash_and_equivalents if latest_bs and latest_bs.cash_and_equivalents else 0.0
+
+        prior_4_q = q_filings[4:8] if len(q_filings) >= 8 else []
+        if len(prior_4_q) >= 1:
+            sales_prev_val = sum(q.revenue for q in prior_4_q if q.revenue is not None) * (4.0 / len(prior_4_q))
+        elif len(annual_filings) > 1 and annual_filings[1].revenue:
+            sales_prev_val = annual_filings[1].revenue
+        else:
+            sales_prev_val = rev_val
+
+        if latest_bs and prior_bs and latest_bs.total_current_assets and latest_bs.current_liabilities and prior_bs.total_current_assets and prior_bs.current_liabilities:
+            wc_current = (latest_bs.total_current_assets - (latest_bs.cash_and_equivalents or 0.0)) - (latest_bs.current_liabilities - (latest_bs.short_term_debt or 0.0))
+            wc_prior = (prior_bs.total_current_assets - (prior_bs.cash_and_equivalents or 0.0)) - (prior_bs.current_liabilities - (prior_bs.short_term_debt or 0.0))
+            delta_wc = wc_current - wc_prior
+        else:
+            delta_wc = 0.0
+
+        mcap_val = m.get("market_cap_cr") or ((current_price * (latest_bs.shares_outstanding or 0.0)) / 10000000.0 if (current_price and latest_bs and latest_bs.shares_outstanding) else 0.0)
+        if mcap_val <= 0:
+            mcap_val = (pe_val or 25.0) * pat_val if pat_val > 0 else 100.0
 
         # 1. Reverse-Engineered 10x TAM Hurdle
-        mcap_val = current_price * (m.get("share_count") or (current_price * 10000000 / max(1, current_price))) / 10000000.0 if current_price else 1000.0
-        # If market cap calculation from raw shares unavailable, estimate from turnover / revenue
-        rev_val = m.get("ttm_revenue_cr") or 1000.0
-        pat_val = m.get("ttm_pat_cr") or (rev_val * 0.10)
         tam_info = ReverseTAMHurdleEngine.resolve_industry_tam(symbol, sector_name)
         tam_hurdle = ReverseTAMHurdleEngine.evaluate_10x_reverse_hurdle(
-            current_market_cap_cr=max(100.0, (m.get("trailing_pe") or 25.0) * pat_val),
+            current_market_cap_cr=max(1.0, mcap_val),
             current_revenue_cr=rev_val,
             current_pat_cr=pat_val,
             industry_niche_tam_cr=tam_info["niche_tam_cr"],
@@ -179,10 +245,10 @@ class DecisionEngine:
         )
 
         # 2. Latent Upside Map (Distance to Excellence)
-        roce_val = m.get("ttm_roce_pct") or 15.0
+        roce_val = m.get("ttm_roce_pct") or 0.0
         latent_map = LatentUpsideEngine.calculate_latent_upside_map(
             current_revenue_cr=rev_val,
-            current_ebit_cr=m.get("ttm_ebit_cr") or (rev_val * 0.15),
+            current_ebit_cr=ebit_val,
             current_pat_cr=pat_val,
             current_market_cap_cr=tam_hurdle["current_market_cap_cr"],
             current_roce_pct=roce_val,
@@ -193,27 +259,28 @@ class DecisionEngine:
 
         # 3. Economic ROIC
         econ_roic = EconomicROICEngine.calculate_economic_roic(
-            ebit_cr=m.get("ttm_ebit_cr") or (rev_val * 0.15),
+            ebit_cr=ebit_val,
             tax_rate_pct=25.0,
-            net_worth_cr=m.get("net_worth_cr") or (rev_val * 0.5),
-            borrowings_cr=m.get("total_debt_cr") or (rev_val * 0.2),
-            cash_and_equivalents_cr=m.get("cash_and_equivalents_cr") or 0.0
+            net_worth_cr=net_worth_val,
+            borrowings_cr=borrowings_val,
+            cash_and_equivalents_cr=cash_val
         )
 
         # 4. Growth vs Maintenance CapEx Breakdown
         capex_breakdown = ReinvestmentCalculator.calculate_growth_vs_maintenance_capex(
-            total_capex_cr=m.get("ttm_capex_cr") or (rev_val * 0.08),
-            depreciation_cr=m.get("ttm_depreciation_cr") or (rev_val * 0.04),
+            total_capex_cr=capex_val,
+            depreciation_cr=depr_val,
             sales_current_cr=rev_val,
-            sales_previous_cr=rev_val * 0.85
+            sales_previous_cr=sales_prev_val
         )
 
         growth_reinvest = ReinvestmentCalculator.calculate_growth_reinvestment_rate(
             growth_capex_cr=capex_breakdown["growth_capex_cr"],
-            delta_working_capital_cr=rev_val * 0.03,
+            delta_working_capital_cr=delta_wc,
             nopat_cr=econ_roic["nopat_cr"],
             incremental_roic_pct=econ_roic["economic_roic_pct"]
         )
+
 
         # 9 Fundamental Multibagger Discovery Questions Evaluation
         fcf_y = m.get("ttm_fcf_yield_pct") or 2.5
@@ -302,7 +369,12 @@ class DecisionEngine:
                     "grade": longterm_data.get("conviction_grade", "NEUTRAL"),
                     "roce_pct": m.get("ttm_roce_pct"),
                     "fcf_yield_pct": m.get("ttm_fcf_yield_pct"),
-                    "pe_ratio": m.get("trailing_pe")
+                    "pe_ratio": m.get("trailing_pe"),
+                    "pb_ratio": m.get("price_to_book"),
+                    "debt_to_equity": m.get("debt_to_equity"),
+                    "pat_growth_yoy": m.get("pat_yoy_pct"),
+                    "revenue_growth_yoy": m.get("revenue_yoy_pct"),
+                    "market_cap_cr": m.get("market_cap_cr")
                 },
                 "swing": {
                     "score": sw_score,

@@ -84,8 +84,41 @@ class BitemporalIngestionEngine:
 
         is_restatement = False
         if existing_active:
+            # Check if metrics are actually different (genuine restatement vs duplicate idempotent ingest)
+            def _is_close(v1, v2):
+                if v1 is None and v2 is None:
+                    return True
+                if v1 is None or v2 is None:
+                    return False
+                try:
+                    return abs(float(v1) - float(v2)) < 0.01
+                except Exception:
+                    return v1 == v2
+
+            fields_to_check = [
+                ("revenue", metrics.get("revenue")),
+                ("ebitda", metrics.get("ebitda")),
+                ("depreciation", metrics.get("depreciation")),
+                ("ebit", metrics.get("ebit")),
+                ("pat", metrics.get("pat")),
+                ("eps", metrics.get("eps")),
+                ("total_debt", metrics.get("total_debt")),
+                ("net_worth", metrics.get("net_worth")),
+                ("total_assets", metrics.get("total_assets")),
+                ("operating_cash_flow", metrics.get("operating_cash_flow")),
+                ("capex", metrics.get("capex"))
+            ]
+            has_changed = any(not _is_close(getattr(existing_active, f_name, None), f_val) for f_name, f_val in fields_to_check if f_val is not None)
+
+            if not has_changed:
+                logger.debug(
+                    f"[BitemporalIngest] Idempotent re-ingest | company={company_id} "
+                    f"period={period_end_date}. Active record retained unchanged."
+                )
+                return existing_active
+
             logger.info(
-                f"[BitemporalIngest] Restatement detected | company={company_id} "
+                f"[BitemporalIngest] Genuine Restatement detected | company={company_id} "
                 f"period={period_end_date}. Closing old record (system_rec_end={rec_start})."
             )
             existing_active.system_rec_end = rec_start
@@ -104,6 +137,7 @@ class BitemporalIngestionEngine:
             # Income statement
             revenue=metrics.get("revenue"),
             ebitda=metrics.get("ebitda"),
+            depreciation=metrics.get("depreciation"),
             ebit=metrics.get("ebit"),
             pat=metrics.get("pat"),
             eps=metrics.get("eps"),

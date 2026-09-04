@@ -58,13 +58,9 @@ class OOSFirewall:
         If the required horizon exceeds max_available_date and target event hasn't occurred,
         it is marked ONGOING/RIGHT_CENSORED rather than a negative/failure.
         """
-        # Calculate expected completion date
+        # Calculate expected completion date using exact calendar day offset
         days_in_horizon = int(horizon_years * 365.25)
-        try:
-            expected_end_year = int(t0_date.year + horizon_years)
-            expected_end_date = date(expected_end_year, t0_date.month, min(t0_date.day, 28))
-        except Exception:
-            expected_end_date = date.fromordinal(t0_date.toordinal() + days_in_horizon)
+        expected_end_date = date.fromordinal(t0_date.toordinal() + days_in_horizon)
 
         if target_event_occurred:
             return {

@@ -41,11 +41,56 @@ class EarningsAccelerationEngine:
                 "is_earnings_accelerating": False,
             }
 
-        q = sorted(quarterly_results, key=lambda x: x.get("period_end_date", ""))
+        q = sorted(quarterly_results, key=lambda x: str(x.get("period_end_date", "")))
         q0 = q[-1]
         q_minus_1 = q[-2]
-        q_minus_4 = q[-5] if len(q) >= 5 else None
-        q_minus_5 = q[-6] if len(q) >= 6 else None
+
+        def _find_yoy(target_q):
+            t_ped = target_q.get("period_end_date")
+            if not t_ped:
+                return None
+            if isinstance(t_ped, str):
+                try:
+                    from datetime import datetime as dt
+                    t_date = dt.strptime(t_ped[:10], "%Y-%m-%d").date()
+                except Exception:
+                    return None
+            elif hasattr(t_ped, "year"):
+                t_date = t_ped
+            else:
+                return None
+
+            t_month = t_date.month
+            t_year = t_date.year - 1
+
+            for cand in q:
+                c_ped = cand.get("period_end_date")
+                if not c_ped:
+                    continue
+                if isinstance(c_ped, str):
+                    try:
+                        from datetime import datetime as dt
+                        c_date = dt.strptime(c_ped[:10], "%Y-%m-%d").date()
+                    except Exception:
+                        continue
+                elif hasattr(c_ped, "year"):
+                    c_date = c_ped
+                else:
+                    continue
+
+                if c_date.year == t_year and c_date.month == t_month:
+                    return cand
+            # Fallback to quarter boundary matching
+            for cand in q:
+                c_ped = cand.get("period_end_date")
+                if not c_ped: continue
+                c_date = dt.strptime(c_ped[:10], "%Y-%m-%d").date() if isinstance(c_ped, str) else c_ped
+                if hasattr(c_date, "year") and c_date.year == t_year and (c_date.month - 1) // 3 == (t_month - 1) // 3:
+                    return cand
+            return None
+
+        q_minus_4 = _find_yoy(q0) or (q[-5] if len(q) >= 5 else None)
+        q_minus_5 = _find_yoy(q_minus_1) or (q[-6] if len(q) >= 6 else None)
 
         if not q_minus_4 or not q_minus_5:
             return {

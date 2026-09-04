@@ -33,15 +33,15 @@ class LongTermEngine:
         industry = comp.industry or "General Industry"
 
         roce = feats.get("roce_pct")
-        rev_growth = feats.get("revenue_yoy_growth_pct") or 10.0
-        pat_growth = feats.get("pat_yoy_growth_pct") or 10.0
-        ebitda_margin = feats.get("ebitda_margin") or 15.0
-        pat_margin = feats.get("pat_margin") or 8.0
+        rev_growth = feats.get("revenue_yoy_growth_pct")
+        pat_growth = feats.get("pat_yoy_growth_pct")
+        ebitda_margin = feats.get("ebitda_margin")
+        pat_margin = feats.get("pat_margin")
         dte = feats.get("debt_to_equity")
         pe = feats.get("pe_ratio")
         pb = feats.get("pb_ratio")
         mcap = feats.get("market_cap_crores")
-        fcf = feats.get("ttm_fcf") or 0.0
+        fcf = feats.get("ttm_fcf")
         fcf_yield = feats.get("fcf_yield_pct")  # Let FeatureEngine compute it correctly
 
         # ──────────────────────────────────────────────────────────────
@@ -56,8 +56,13 @@ class LongTermEngine:
         # ──────────────────────────────────────────────────────────────
         # Dimension 2: Compounding Growth Consistency (0 - 100)
         # ──────────────────────────────────────────────────────────────
-        growth_raw = 50.0 + (min(40.0, max(-20.0, rev_growth)) * 0.6) + (min(40.0, max(-20.0, pat_growth)) * 0.5)
-        growth_score = int(min(98, max(20, growth_raw)))
+        if rev_growth is not None or pat_growth is not None:
+            rg = rev_growth if rev_growth is not None else 0.0
+            pg = pat_growth if pat_growth is not None else 0.0
+            growth_raw = 50.0 + (min(40.0, max(-20.0, rg)) * 0.6) + (min(40.0, max(-20.0, pg)) * 0.5)
+            growth_score = int(min(98, max(20, growth_raw)))
+        else:
+            growth_score = None
 
         # ──────────────────────────────────────────────────────────────
         # Dimension 3: Balance Sheet & Solvency Safety (0 - 100)
@@ -132,7 +137,7 @@ class LongTermEngine:
         if dte is not None and dte <= 0.5:
             thesis_points.append(f"Clean, low-leverage balance sheet (Debt/Equity: {dte:.2f})")
 
-        if rev_growth >= 12.0:
+        if rev_growth is not None and rev_growth >= 12.0:
             thesis_points.append(f"Consistent top-line compounding (YoY Revenue: {rev_growth:+.1f}%)")
 
         risk_points = []
@@ -140,7 +145,7 @@ class LongTermEngine:
             risk_points.append(f"Elevated valuation multiple (Trailing P/E: {pe:.1f})")
         if dte is not None and dte > 1.2:
             risk_points.append(f"Elevated financial leverage (Debt/Equity: {dte:.2f})")
-        if pat_margin < 4.0:
+        if pat_margin is not None and pat_margin < 4.0:
             risk_points.append(f"Thin net profit margin ({pat_margin:.1f}%)")
 
         return {

@@ -643,18 +643,20 @@
                             <th>Day Chg %</th>
                             <th>52-Week Range</th>
                             <th>50-DMA Dist</th>
-                            <th>M6 Long-Term</th>
-                            <th>Swing Setup</th>
+                            <th>M6 Score</th>
+                            <th>5-Pillar Multibagger Tier</th>
+                            <th>Expectations Gap</th>
+                            <th>Working Capital</th>
                             <th>Next Catalyst (SEBI)</th>
                             <th>ROCE %</th>
-                            <th>Trailing P/E</th>
+                            <th>Valuation / PEG</th>
                             <th>Promoter (Pledge)</th>
                             <th>Max Sizing (5% ADV)</th>
                             <th>Actions</th>
                         </tr>
                     </thead>
                     <tbody id="watchlistTableBody">
-                        <tr><td colspan="13" style="text-align: center; color: var(--text-dim); padding: 2rem;">Loading watchlist parameters from Upstox...</td></tr>
+                        <tr><td colspan="15" style="text-align: center; color: var(--text-dim); padding: 2rem;">Loading watchlist parameters from Upstox...</td></tr>
                     </tbody>
                 </table>
             </div>
@@ -1058,13 +1060,13 @@
             const avgRoce = (stocks.reduce((acc, s) => acc + (s.roce_pct || 0), 0) / stocks.length).toFixed(1);
             document.getElementById('kpiAvgROCE').innerText = `${avgRoce}%`;
 
-            const topM6 = [...stocks].sort((a, b) => b.m6_longterm_score - a.m6_longterm_score)[0];
-            document.getElementById('kpiTopM6').innerText = topM6 ? `${topM6.symbol} (${topM6.m6_longterm_score})` : '-';
+            const topM6 = [...stocks].sort((a, b) => (b.m6_longterm_score || 0) - (a.m6_longterm_score || 0))[0];
+            document.getElementById('kpiTopM6').innerText = topM6 && topM6.m6_longterm_score !== undefined ? `${topM6.symbol} (${topM6.m6_longterm_score})` : '-';
 
             const medianPe = (stocks.reduce((acc, s) => acc + (s.pe_ratio || 0), 0) / stocks.length).toFixed(1);
             document.getElementById('kpiMedianPE').innerText = `${medianPe}x`;
 
-            const totalCap = stocks.reduce((acc, s) => acc + (s.liquidity.max_safe_position_size_cr || 0), 0).toFixed(1);
+            const totalCap = stocks.reduce((acc, s) => acc + ((s.liquidity && s.liquidity.max_safe_position_size_cr) || 0), 0).toFixed(1);
             document.getElementById('kpiTotalCap').innerText = `₹${totalCap} Cr`;
         }
 
@@ -1170,6 +1172,27 @@
                     `;
                 }
 
+                // 5-Pillar Attributes
+                const p5 = s.multibagger_5pillar || {};
+                const p3_wc = (p5.pillar_3_working_capital || {});
+                const p4_gap = (p5.pillar_4_expectations_gap || {});
+                const p5_tier = p5.tier || 'WATCHLIST_INCUBATING';
+                const p5_badge = p5.badge_class || 'badge-cyan';
+                const p5_score = p5.composite_5pillar_score !== undefined ? p5.composite_5pillar_score : 50.0;
+
+                const tierLabel = p5_tier.replace(/_/g, ' ');
+
+                let gapBadge = 'badge-cyan';
+                let gapText = 'N/A';
+                if (p4_gap.expectations_gap_pct !== null && p4_gap.expectations_gap_pct !== undefined) {
+                    const g = p4_gap.expectations_gap_pct;
+                    gapText = (g > 0 ? '+' : '') + g + '%';
+                    gapBadge = g >= 8.0 ? 'badge-emerald' : (g >= 2.0 ? 'badge-cyan' : (g >= -3.0 ? 'badge-blue' : 'badge-rose'));
+                }
+
+                let wcBadge = p3_wc.badge_class || 'badge-emerald';
+                let wcLabel = (p3_wc.status || 'HEALTHY').replace(/_/g, ' ');
+
                 return `
                     <tr>
                         <td>
@@ -1193,14 +1216,31 @@
                             <span class="badge-tag ${s.m6_longterm_score ? 'badge-purple' : 'badge-slate'}" style="font-size:0.75rem;">${s.m6_longterm_score !== null && s.m6_longterm_score !== undefined ? s.m6_longterm_score + '/100' : 'N/A'}</span>
                         </td>
                         <td>
-                            <span style="color:var(--accent-cyan); font-weight:700;">${s.swing_setup || 'N/A'}</span>
-                            <div style="font-size:0.68rem; color:var(--accent-emerald);">T: ${s.swing_target ? '₹' + s.swing_target : '-'}</div>
+                            <span class="badge-tag ${p5_badge}" style="font-size:0.70rem; font-weight:700; cursor:pointer;" onclick="openStockModalDetail('${s.symbol}')" title="${p5.verdict_summary || ''}">
+                                ${tierLabel}
+                            </span>
+                            <div style="font-size:0.68rem; color:var(--text-dim); margin-top:2px;">5P Score: ${p5_score}/100</div>
+                        </td>
+                        <td>
+                            <span class="badge-tag ${gapBadge}" style="font-size:0.70rem; font-family:var(--font-mono); font-weight:700;">${gapText}</span>
+                            <div style="font-size:0.65rem; color:var(--text-dim); margin-top:2px;">Compounding Gap</div>
+                        </td>
+                        <td>
+                            <span class="badge-tag ${wcBadge}" style="font-size:0.68rem;">${wcLabel}</span>
+                            <div style="font-size:0.65rem; color:var(--text-dim); margin-top:2px;">DSO: ${p3_wc.dso !== null && p3_wc.dso !== undefined ? p3_wc.dso + 'd' : 'N/A'}</div>
                         </td>
                         <td>
                             ${catalystHtml}
                         </td>
                         <td><strong style="color:var(--accent-emerald); font-family:var(--font-mono);">${s.roce_pct !== null && s.roce_pct !== undefined ? s.roce_pct + '%' : 'N/A'}</strong></td>
-                        <td><span class="badge-tag ${s.pe_ratio ? 'badge-amber' : 'badge-slate'}" style="font-size:0.72rem;">${s.pe_ratio !== null && s.pe_ratio !== undefined ? s.pe_ratio + 'x' : 'N/A'}</span></td>
+                        <td>
+                            <span class="badge-tag ${s.valuation && s.valuation.badge_class ? s.valuation.badge_class : 'badge-cyan'}" style="font-size:0.72rem; cursor:pointer;" onclick="openStockModalDetail('${s.symbol}')" title="${s.valuation && s.valuation.verdict_summary ? s.valuation.verdict_summary : ''}">
+                                ${s.valuation && s.valuation.status_label ? s.valuation.status_label : 'Fairly Valued'}
+                            </span>
+                            <div style="font-size:0.68rem; color:var(--text-dim); margin-top:2px;">
+                                ${s.valuation && s.valuation.peg_ratio ? 'PEG: ' + s.valuation.peg_ratio + 'x' : (s.valuation && s.valuation.fcf_yield_pct ? 'FCF: ' + s.valuation.fcf_yield_pct + '%' : '')}
+                            </div>
+                        </td>
                         <td>
                             <strong>${s.shareholding && s.shareholding.promoter_pct !== null && s.shareholding.promoter_pct !== undefined ? s.shareholding.promoter_pct + '%' : 'N/A'}</strong>
                             <div style="font-size:0.68rem; color:${s.shareholding && s.shareholding.promoter_pledge_pct > 0 ? 'var(--accent-rose)' : 'var(--text-dim)'};">Pledge: ${s.shareholding ? (s.shareholding.promoter_pledge_pct || 0) : 0}%</div>
@@ -1238,9 +1278,11 @@
 
                 const s = res.stock;
                 const m = s.multibagger_matrix || {};
+                const p5 = s.multibagger_5pillar || {};
                 const thesis = s.dual_thesis || {};
                 const nextAnn = s.next_announcement || {};
                 const catalysts = s.regulatory_catalysts || [];
+                const v = s.valuation || {};
 
                 const modalChg = formatPriceChange(s.day_change_pct, s.day_change_inr);
                 const modalDma50 = formatPercentMetric(s.dist_50_dma_pct);
@@ -1267,18 +1309,33 @@
                     </div>
                 `).join('') : `<div style="color:var(--text-dim); font-size:0.80rem;">No active high-materiality filings in recent window.</div>`;
 
+                const sh = s.shareholding || {};
+                const liq = s.liquidity || {};
+
+                // 5-Pillar Nodes
+                const p1 = p5.pillar_1_inflection || {};
+                const p2 = p5.pillar_2_tam_capacity || {};
+                const p3 = p5.pillar_3_working_capital || {};
+                const p4 = p5.pillar_4_expectations_gap || {};
+                const p5_tech = p5.pillar_5_price_structure || {};
+
+                const p1_accel = p1.acceleration || {};
+                const p5_stage = p5_tech.stage_analysis || {};
+                const p5_rs = p5_tech.mansfield_rs || {};
+                const p5_vcp = p5_tech.vcp_analysis || {};
+
                 body.innerHTML = `
                     <div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:1.5rem; border-bottom:1px solid var(--border-color); padding-bottom:1rem;">
                         <div>
                             <div style="display:flex; align-items:center; gap:0.75rem;">
                                 <h2 style="font-size:1.6rem; font-weight:900; color:#fff;">${s.symbol}</h2>
-                                <span class="badge-tag badge-purple">${s.sector}</span>
-                                <span class="badge-tag badge-emerald">${s.primary_verdict}</span>
+                                <span class="badge-tag badge-purple">${s.sector || 'N/A'}</span>
+                                <span class="badge-tag ${p5.badge_class || 'badge-emerald'}">${(p5.tier || s.primary_verdict || 'N/A').replace(/_/g, ' ')}</span>
                             </div>
-                            <div style="color:var(--text-muted); font-size:0.85rem; margin-top:3px;">${s.company_name}</div>
+                            <div style="color:var(--text-muted); font-size:0.85rem; margin-top:3px;">${s.company_name || ''}</div>
                         </div>
                         <div style="text-align:right;">
-                            <div style="font-size:1.6rem; font-weight:900; font-family:var(--font-mono); color:#fff;">₹${s.current_price.toLocaleString()}</div>
+                            <div style="font-size:1.6rem; font-weight:900; font-family:var(--font-mono); color:#fff;">₹${(s.current_price || 0).toLocaleString()}</div>
                             <div style="font-size:0.85rem; font-weight:700; color:${modalChg.color};">${modalChg.fullText}</div>
                         </div>
                     </div>
@@ -1288,13 +1345,13 @@
                         <div>
                             <div style="font-size:0.72rem; color:var(--accent-amber); font-weight:800; letter-spacing:0.05em;">📅 NEXT CATALYST (SEBI LODR ADVANCE DISCLOSURE)</div>
                             <div style="font-size:1.05rem; font-weight:800; color:#fff; margin-top:2px;">
-                                ${nextAnn.meeting_date !== 'TBD' ? 'Board Meeting: ' + nextAnn.meeting_date : 'Awaiting Next Board Meeting Notice'}
+                                ${nextAnn.meeting_date && nextAnn.meeting_date !== 'TBD' ? 'Board Meeting: ' + nextAnn.meeting_date : 'Awaiting Next Board Meeting Notice'}
                             </div>
                             <div style="font-size:0.78rem; color:var(--text-muted); margin-top:2px;">Purpose: <strong>${nextAnn.purpose || 'Quarterly Financial Results & Corporate Actions'}</strong></div>
                         </div>
                         <div style="text-align:right;">
                             <span class="badge-tag ${nextAnn.days_until_event !== null && nextAnn.days_until_event <= 3 ? 'badge-rose' : 'badge-amber'}" style="font-size:0.85rem;">
-                                ${nextAnn.days_until_event !== null ? '⏳ In ' + nextAnn.days_until_event + ' Days' : 'AWAITING NOTICE'}
+                                ${nextAnn.days_until_event !== null && nextAnn.days_until_event !== undefined ? '⏳ In ' + nextAnn.days_until_event + ' Days' : 'AWAITING NOTICE'}
                             </span>
                             <div style="font-size:0.70rem; color:${nextAnn.blackout_period_active ? 'var(--accent-rose)' : 'var(--text-dim)'}; margin-top:4px;">
                                 ${nextAnn.blackout_period_active ? '🔒 Insider Trading Blackout Window Active' : 'Trading Window Open'}
@@ -1302,27 +1359,111 @@
                         </div>
                     </div>
 
-                    <!-- 3 Horizon Score Cards -->
-                    <div style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:1rem; margin-bottom:1.5rem;">
-                        <div style="background:rgba(168,85,247,0.08); border:1px solid rgba(168,85,247,0.3); border-radius:8px; padding:1rem;">
-                            <div style="font-size:0.75rem; color:var(--accent-purple); font-weight:700;">🟢 MODEL M6 LONG-TERM</div>
-                            <div style="font-size:1.5rem; font-weight:800; color:#fff; font-family:var(--font-mono); margin:0.3rem 0;">${s.m6_longterm_score}/100</div>
-                            <div style="font-size:0.72rem; color:var(--text-muted);">ROCE: <strong style="color:var(--accent-emerald);">${s.roce_pct}%</strong> | P/E: ${s.pe_ratio}x</div>
-                            <div style="font-size:0.68rem; color:var(--accent-emerald); margin-top:3px;">${s.m6_evidence_tier}</div>
+                    <!-- 5-PILLAR INSTITUTIONAL MULTIBAGGER DISCOVERY MATRIX -->
+                    <div style="background:rgba(0,255,157,0.04); border:1px solid rgba(0,255,157,0.3); border-radius:10px; padding:1.25rem; margin-bottom:1.5rem;">
+                        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.9rem;">
+                            <div style="display:flex; align-items:center; gap:0.6rem;">
+                                <span style="font-size:1.15rem;">🏛️</span>
+                                <div>
+                                    <div style="font-weight:900; color:#fff; font-size:0.98rem; letter-spacing:0.03em;">5-PILLAR INSTITUTIONAL MULTIBAGGER DISCOVERY MATRIX</div>
+                                    <div style="font-size:0.72rem; color:var(--text-muted);">Nonlinear Inflection • Capacity TAM • Working Capital Sentinel • Expectations Gap • Price Structure</div>
+                                </div>
+                            </div>
+                            <div style="display:flex; align-items:center; gap:0.5rem;">
+                                <span class="badge-tag ${p5.badge_class || 'badge-emerald'}" style="font-size:0.80rem; font-weight:800;">${(p5.tier || 'WATCHLIST_INCUBATING').replace(/_/g, ' ')}</span>
+                                <span class="badge-tag badge-purple" style="font-size:0.80rem; font-weight:800;">5P Score: ${p5.composite_5pillar_score || 50}/100</span>
+                            </div>
                         </div>
 
-                        <div style="background:rgba(0,240,255,0.08); border:1px solid rgba(0,240,255,0.3); border-radius:8px; padding:1rem;">
-                            <div style="font-size:0.75rem; color:var(--accent-cyan); font-weight:700;">🟡 SWING SETUP (2-4W)</div>
-                            <div style="font-size:1.5rem; font-weight:800; color:#fff; font-family:var(--font-mono); margin:0.3rem 0;">${s.swing_score}/100</div>
-                            <div style="font-size:0.72rem; color:var(--text-muted);">Setup: <strong>${s.swing_setup}</strong></div>
-                            <div style="font-size:0.70rem; color:var(--text-dim); margin-top:3px;">Target: <strong style="color:var(--accent-emerald);">₹${s.swing_target || '-'}</strong> | SL: ₹${s.swing_stop_loss || '-'}</div>
+                        ${p5.circuit_breaker_triggered ? `
+                            <div style="background:rgba(255,0,85,0.12); border:1px solid rgba(255,0,85,0.4); border-radius:6px; padding:0.6rem 0.8rem; margin-bottom:0.85rem; color:#ff4d79; font-size:0.78rem; font-weight:700;">
+                                🛑 HARD CIRCUIT BREAKER TRIGGERED: ${p5.circuit_breaker_reasons ? p5.circuit_breaker_reasons.join(' | ') : 'Forensic or structural rejection.'}
+                            </div>
+                        ` : ''}
+
+                        <div style="display:grid; grid-template-columns: repeat(5, 1fr); gap:0.75rem; margin-bottom:0.85rem;">
+                            <!-- Pillar 1 -->
+                            <div style="background:rgba(0,0,0,0.35); border:1px solid var(--border-color); border-radius:8px; padding:0.75rem;">
+                                <div style="font-size:0.68rem; color:var(--accent-purple); font-weight:800;">P1: INFLECTION</div>
+                                <div style="font-size:1.15rem; font-weight:800; color:#fff; font-family:var(--font-mono); margin:2px 0;">${p1.compounding_score || 50}/100</div>
+                                <div style="font-size:0.65rem; color:${p1_accel.is_accelerating ? 'var(--accent-emerald)' : 'var(--text-muted)'}; font-weight:700;">
+                                    ${p1_accel.is_accelerating ? 'Δ² EBITDA > 0 (Accelerating)' : 'Linear / Baseline'}
+                                </div>
+                                <div style="font-size:0.62rem; color:var(--text-dim); margin-top:2px;">Compounding Velocity</div>
+                            </div>
+
+                            <!-- Pillar 2 -->
+                            <div style="background:rgba(0,0,0,0.35); border:1px solid var(--border-color); border-radius:8px; padding:0.75rem;">
+                                <div style="font-size:0.68rem; color:var(--accent-cyan); font-weight:800;">P2: CAPACITY TAM</div>
+                                <div style="font-size:1.15rem; font-weight:800; color:#fff; font-family:var(--font-mono); margin:2px 0;">${p2.growth_runway_years ? p2.growth_runway_years + ' Yrs' : 'N/A'}</div>
+                                <div style="font-size:0.65rem; color:var(--accent-cyan); font-weight:700;">SOM: ₹${p2.effective_som_cr ? Number(p2.effective_som_cr).toLocaleString() : 'N/A'} Cr</div>
+                                <div style="font-size:0.62rem; color:var(--text-dim); margin-top:2px;">Limit: ${p2.primary_bottleneck || 'Market Share'}</div>
+                            </div>
+
+                            <!-- Pillar 3 -->
+                            <div style="background:rgba(0,0,0,0.35); border:1px solid var(--border-color); border-radius:8px; padding:0.75rem;">
+                                <div style="font-size:0.68rem; color:var(--accent-amber); font-weight:800;">P3: WC SENTINEL</div>
+                                <div style="font-size:1.15rem; font-weight:800; color:${p3.risk_score >= 40 ? 'var(--accent-rose)' : 'var(--accent-emerald)'}; font-family:var(--font-mono); margin:2px 0;">${p3.status || 'HEALTHY'}</div>
+                                <div style="font-size:0.65rem; color:var(--text-muted);">DSO: ${p3.dso !== null && p3.dso !== undefined ? p3.dso + 'd' : 'N/A'} (Δ²: ${p3.delta2_dso !== null && p3.delta2_dso !== undefined ? p3.delta2_dso + 'd' : '0'})</div>
+                                <div style="font-size:0.62rem; color:var(--text-dim); margin-top:2px;">CFO/EBITDA: ${p3.cfo_to_ebitda_pct !== null && p3.cfo_to_ebitda_pct !== undefined ? p3.cfo_to_ebitda_pct + '%' : 'N/A'}</div>
+                            </div>
+
+                            <!-- Pillar 4 -->
+                            <div style="background:rgba(0,0,0,0.35); border:1px solid var(--border-color); border-radius:8px; padding:0.75rem;">
+                                <div style="font-size:0.68rem; color:var(--accent-emerald); font-weight:800;">P4: EXPECTATIONS GAP</div>
+                                <div style="font-size:1.15rem; font-weight:800; color:${p4.expectations_gap_pct && p4.expectations_gap_pct > 0 ? 'var(--accent-emerald)' : 'var(--accent-rose)'}; font-family:var(--font-mono); margin:2px 0;">
+                                    ${p4.expectations_gap_pct !== null && p4.expectations_gap_pct !== undefined ? (p4.expectations_gap_pct > 0 ? '+' : '') + p4.expectations_gap_pct + '%' : 'N/A'}
+                                </div>
+                                <div style="font-size:0.65rem; color:var(--text-muted);">Run-Rate: ${p4.intrinsic_compounding_rate_pct || 'N/A'}%</div>
+                                <div style="font-size:0.62rem; color:var(--text-dim); margin-top:2px;">Implied Hurdle: ${p4.market_implied_growth_5y_pct || 'N/A'}%</div>
+                            </div>
+
+                            <!-- Pillar 5 -->
+                            <div style="background:rgba(0,0,0,0.35); border:1px solid var(--border-color); border-radius:8px; padding:0.75rem;">
+                                <div style="font-size:0.68rem; color:var(--accent-cyan); font-weight:800;">P5: PRICE STRUCTURE</div>
+                                <div style="font-size:1.15rem; font-weight:800; color:#fff; font-family:var(--font-mono); margin:2px 0;">${(p5_stage.stage || 'STAGE_1_ACCUMULATION').replace(/_/g, ' ')}</div>
+                                <div style="font-size:0.65rem; color:${p5_rs.score > 0 ? 'var(--accent-emerald)' : 'var(--accent-rose)'}; font-weight:700;">
+                                    RS: ${p5_rs.score !== null && p5_rs.score !== undefined ? (p5_rs.score > 0 ? '+' : '') + p5_rs.score : 'N/A'} vs NIFTY
+                                </div>
+                                <div style="font-size:0.62rem; color:var(--text-dim); margin-top:2px;">VCP: ${p5_vcp.is_vcp_detected ? 'COMPRESSION READY' : 'Normal'}</div>
+                            </div>
                         </div>
 
-                        <div style="background:rgba(255,183,0,0.08); border:1px solid rgba(255,183,0,0.3); border-radius:8px; padding:1rem;">
-                            <div style="font-size:0.75rem; color:var(--accent-amber); font-weight:700;">🔴 INTRADAY SCALP (1D)</div>
-                            <div style="font-size:1.5rem; font-weight:800; color:#fff; font-family:var(--font-mono); margin:0.3rem 0;">${s.intraday_score}/100</div>
-                            <div style="font-size:0.72rem; color:var(--text-muted);">Setup: <strong>${s.intraday_setup}</strong></div>
-                            <div style="font-size:0.70rem; color:var(--accent-emerald); margin-top:3px;">Strict 1:2.0 Risk-Reward Parity</div>
+                        <div style="font-size:0.75rem; color:var(--text-main); background:rgba(0,0,0,0.25); padding:0.5rem 0.75rem; border-radius:6px; border-left:3px solid var(--accent-emerald);">
+                            <strong>5-Pillar Synthesis Verdict:</strong> ${p5.verdict_summary || 'Multi-pillar assessment confirmed.'}
+                        </div>
+                    </div>
+
+                    <!-- 3-Pillar Institutional Valuation Intelligence Card -->
+                    <div style="background:rgba(0,240,255,0.04); border:1px solid rgba(0,240,255,0.25); border-radius:8px; padding:1.25rem; margin-bottom:1.5rem;">
+                        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.75rem;">
+                            <div style="font-weight:800; color:var(--accent-cyan); font-size:0.95rem;">⚖️ 3-PILLAR INSTITUTIONAL VALUATION MATRIX (MAUBOUSSIN & DAMODARAN)</div>
+                            <span class="badge-tag ${v.badge_class || 'badge-cyan'}" style="font-size:0.75rem;">${v.status_label || 'Fairly Valued'}</span>
+                        </div>
+                        <div style="display:grid; grid-template-columns: repeat(4, 1fr); gap:0.75rem; margin-bottom:0.75rem;">
+                            <div style="background:rgba(0,0,0,0.3); border-radius:6px; padding:0.6rem 0.8rem;">
+                                <div style="font-size:0.68rem; color:var(--text-dim);">GROWTH-ADJUSTED PEG</div>
+                                <div style="font-size:1.15rem; font-weight:800; color:#fff; font-family:var(--font-mono); margin-top:2px;">${v.peg_ratio ? v.peg_ratio + 'x' : 'N/A'}</div>
+                                <div style="font-size:0.65rem; color:${v.peg_ratio && v.peg_ratio <= 1.15 ? 'var(--accent-emerald)' : 'var(--text-muted)'};">${v.peg_ratio ? (v.peg_ratio <= 1.15 ? 'Attractive Growth' : 'Multiple Premium') : 'Base Undefined'}</div>
+                            </div>
+                            <div style="background:rgba(0,0,0,0.3); border-radius:6px; padding:0.6rem 0.8rem;">
+                                <div style="font-size:0.68rem; color:var(--text-dim);">FREE CASH FLOW YIELD</div>
+                                <div style="font-size:1.15rem; font-weight:800; color:var(--accent-emerald); font-family:var(--font-mono); margin-top:2px;">${v.fcf_yield_pct !== null && v.fcf_yield_pct !== undefined ? v.fcf_yield_pct + '%' : 'N/A'}</div>
+                                <div style="font-size:0.65rem; color:var(--text-muted);">vs 10Y G-Sec: ${v.gsec_spread_pct !== null && v.gsec_spread_pct !== undefined ? (v.gsec_spread_pct > 0 ? '+' : '') + v.gsec_spread_pct + '% spread' : '7.1% Hurdle'}</div>
+                            </div>
+                            <div style="background:rgba(0,0,0,0.3); border-radius:6px; padding:0.6rem 0.8rem;">
+                                <div style="font-size:0.68rem; color:var(--text-dim);">REVERSE-DCF IMPLIED 5Y CAGR</div>
+                                <div style="font-size:1.15rem; font-weight:800; color:var(--accent-purple); font-family:var(--font-mono); margin-top:2px;">${v.reverse_dcf_implied_growth_pct !== null && v.reverse_dcf_implied_growth_pct !== undefined ? v.reverse_dcf_implied_growth_pct + '%' : 'N/A'}</div>
+                                <div style="font-size:0.65rem; color:var(--text-muted);">Market Expectations Hurdle</div>
+                            </div>
+                            <div style="background:rgba(0,0,0,0.3); border-radius:6px; padding:0.6rem 0.8rem;">
+                                <div style="font-size:0.68rem; color:var(--text-dim);">HISTORICAL 3Y P/E PERCENTILE</div>
+                                <div style="font-size:1.15rem; font-weight:800; color:#fff; font-family:var(--font-mono); margin-top:2px;">${v.pe_percentile_3y !== null && v.pe_percentile_3y !== undefined ? v.pe_percentile_3y + 'th' : '50th'}</div>
+                                <div style="font-size:0.65rem; color:var(--text-muted);">Trailing Multiple Band</div>
+                            </div>
+                        </div>
+                        <div style="font-size:0.75rem; color:var(--text-main); background:rgba(255,255,255,0.03); padding:0.5rem 0.75rem; border-radius:6px; border-left:3px solid var(--accent-cyan);">
+                            <strong>Verdict:</strong> ${v.verdict_summary || 'Valuation evaluated across cash flow, growth, and historical bands.'}
                         </div>
                     </div>
 
@@ -1380,20 +1521,125 @@
                         <div style="background:rgba(0,0,0,0.3); border:1px solid var(--border-color); border-radius:8px; padding:1rem;">
                             <div style="font-weight:700; color:var(--accent-purple); font-size:0.85rem; margin-bottom:0.5rem;">🏛️ Shareholding & Governance</div>
                             <div style="font-size:0.80rem; color:var(--text-muted); line-height:1.6;">
-                                Promoter: <strong>${s.shareholding.promoter_pct}%</strong> (Pledge: ${s.shareholding.promoter_pledge_pct}%)<br>
-                                Institutional: <strong>${s.shareholding.institutional_pct}%</strong><br>
-                                FII: <strong>${s.shareholding.fii_pct}%</strong> | DII: <strong>${s.shareholding.dii_pct}%</strong><br>
-                                Status: <span class="badge-tag badge-emerald">${s.shareholding.governance_status}</span>
+                                Promoter: <strong>${sh.promoter_pct !== undefined && sh.promoter_pct !== null ? sh.promoter_pct + '%' : 'N/A'}</strong> (Pledge: ${sh.promoter_pledge_pct || 0}%)<br>
+                                Institutional: <strong>${sh.institutional_pct !== undefined && sh.institutional_pct !== null ? sh.institutional_pct + '%' : 'N/A'}</strong><br>
+                                FII: <strong>${sh.fii_pct !== undefined && sh.fii_pct !== null ? sh.fii_pct + '%' : 'N/A'}</strong> | DII: <strong>${sh.dii_pct !== undefined && sh.dii_pct !== null ? sh.dii_pct + '%' : 'N/A'}</strong><br>
+                                Status: <span class="badge-tag badge-emerald">${sh.governance_status || 'CLEAN'}</span>
                             </div>
                         </div>
 
                         <div style="background:rgba(0,0,0,0.3); border:1px solid var(--border-color); border-radius:8px; padding:1rem;">
                             <div style="font-weight:700; color:var(--accent-emerald); font-size:0.85rem; margin-bottom:0.5rem;">💧 Liquidity & Position Sizing</div>
                             <div style="font-size:0.80rem; color:var(--text-muted); line-height:1.6;">
-                                20D Volume: <strong>${s.liquidity.avg_daily_volume_20.toLocaleString()} shs</strong><br>
-                                Turnover: <strong>₹${s.liquidity.avg_daily_turnover_cr} Cr/day</strong><br>
-                                Max Safe Sizing: <strong style="color:var(--accent-emerald);">₹${s.liquidity.max_safe_position_size_cr} Cr</strong><br>
-                                Sizing: <strong style="color:var(--accent-cyan);">${s.sizing_guidance}</strong>
+                                20D Volume: <strong>${(liq.avg_daily_volume_20 || 0).toLocaleString()} shs</strong><br>
+                                Turnover: <strong>₹${liq.avg_daily_turnover_cr || 0} Cr/day</strong><br>
+                                Max Safe Sizing: <strong style="color:var(--accent-emerald);">₹${liq.max_safe_position_size_cr || 0} Cr</strong><br>
+                                Sizing: <strong style="color:var(--accent-cyan);">${s.sizing_guidance || 'N/A'}</strong>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 3-Pillar Institutional Valuation Intelligence Card -->
+                    <div style="background:rgba(0,240,255,0.04); border:1px solid rgba(0,240,255,0.25); border-radius:8px; padding:1.25rem; margin-bottom:1.5rem;">
+                        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.75rem;">
+                            <div style="font-weight:800; color:var(--accent-cyan); font-size:0.95rem;">⚖️ 3-PILLAR INSTITUTIONAL VALUATION MATRIX (MAUBOUSSIN & DAMODARAN)</div>
+                            <span class="badge-tag ${v.badge_class || 'badge-cyan'}" style="font-size:0.75rem;">${v.status_label || 'Fairly Valued'}</span>
+                        </div>
+                        <div style="display:grid; grid-template-columns: repeat(4, 1fr); gap:0.75rem; margin-bottom:0.75rem;">
+                            <div style="background:rgba(0,0,0,0.3); border-radius:6px; padding:0.6rem 0.8rem;">
+                                <div style="font-size:0.68rem; color:var(--text-dim);">GROWTH-ADJUSTED PEG</div>
+                                <div style="font-size:1.15rem; font-weight:800; color:#fff; font-family:var(--font-mono); margin-top:2px;">${v.peg_ratio ? v.peg_ratio + 'x' : 'N/A'}</div>
+                                <div style="font-size:0.65rem; color:${v.peg_ratio && v.peg_ratio <= 1.15 ? 'var(--accent-emerald)' : 'var(--text-muted)'};">${v.peg_ratio ? (v.peg_ratio <= 1.15 ? 'Attractive Growth' : 'Multiple Premium') : 'Base Undefined'}</div>
+                            </div>
+                            <div style="background:rgba(0,0,0,0.3); border-radius:6px; padding:0.6rem 0.8rem;">
+                                <div style="font-size:0.68rem; color:var(--text-dim);">FREE CASH FLOW YIELD</div>
+                                <div style="font-size:1.15rem; font-weight:800; color:var(--accent-emerald); font-family:var(--font-mono); margin-top:2px;">${v.fcf_yield_pct !== null && v.fcf_yield_pct !== undefined ? v.fcf_yield_pct + '%' : 'N/A'}</div>
+                                <div style="font-size:0.65rem; color:var(--text-muted);">vs 10Y G-Sec: ${v.gsec_spread_pct !== null && v.gsec_spread_pct !== undefined ? (v.gsec_spread_pct > 0 ? '+' : '') + v.gsec_spread_pct + '% spread' : '7.1% Hurdle'}</div>
+                            </div>
+                            <div style="background:rgba(0,0,0,0.3); border-radius:6px; padding:0.6rem 0.8rem;">
+                                <div style="font-size:0.68rem; color:var(--text-dim);">REVERSE-DCF IMPLIED 5Y CAGR</div>
+                                <div style="font-size:1.15rem; font-weight:800; color:var(--accent-purple); font-family:var(--font-mono); margin-top:2px;">${v.reverse_dcf_implied_growth_pct !== null && v.reverse_dcf_implied_growth_pct !== undefined ? v.reverse_dcf_implied_growth_pct + '%' : 'N/A'}</div>
+                                <div style="font-size:0.65rem; color:var(--text-muted);">Market Expectations Hurdle</div>
+                            </div>
+                            <div style="background:rgba(0,0,0,0.3); border-radius:6px; padding:0.6rem 0.8rem;">
+                                <div style="font-size:0.68rem; color:var(--text-dim);">HISTORICAL 3Y P/E PERCENTILE</div>
+                                <div style="font-size:1.15rem; font-weight:800; color:#fff; font-family:var(--font-mono); margin-top:2px;">${v.pe_percentile_3y !== null && v.pe_percentile_3y !== undefined ? v.pe_percentile_3y + 'th' : '50th'}</div>
+                                <div style="font-size:0.65rem; color:var(--text-muted);">Trailing Multiple Band</div>
+                            </div>
+                        </div>
+                        <div style="font-size:0.75rem; color:var(--text-main); background:rgba(255,255,255,0.03); padding:0.5rem 0.75rem; border-radius:6px; border-left:3px solid var(--accent-cyan);">
+                            <strong>Verdict:</strong> ${v.verdict_summary || 'Valuation evaluated across cash flow, growth, and historical bands.'}
+                        </div>
+                    </div>
+
+                    <!-- Regulatory Announcements & Decayed Materiality Feed -->
+                    <div style="background:rgba(0,240,255,0.04); border:1px solid rgba(0,240,255,0.25); border-radius:8px; padding:1.25rem; margin-bottom:1.5rem;">
+                        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.75rem;">
+                            <div style="font-weight:800; color:var(--accent-cyan); font-size:0.95rem;">📜 VERIFIED SEBI LODR REGULATORY FILINGS & TIME-DECAY MATRIX</div>
+                            <span style="font-size:0.70rem; color:var(--text-dim);">Half-Life: 48h (Tactical) / 90d (Structural)</span>
+                        </div>
+                        ${catalystListHtml}
+                    </div>
+
+                    <!-- 9 Fundamental Multibagger Discovery Questions Matrix -->
+                    <div style="background:rgba(168,85,247,0.05); border:1px solid rgba(168,85,247,0.3); border-radius:8px; padding:1.25rem; margin-bottom:1.5rem;">
+                        <div style="font-weight:800; color:var(--accent-purple); font-size:0.95rem; margin-bottom:0.75rem;">🧬 9 FUNDAMENTAL MULTIBAGGER DISCOVERY QUESTIONS</div>
+                        <div style="display:grid; grid-template-columns:1fr 1fr; gap:0.75rem; font-size:0.80rem; line-height:1.5;">
+                            <div>• <strong>1. Could this become a 2×?</strong> <span style="color:var(--accent-emerald);">${m.q1_could_become_2x ? m.q1_could_become_2x.assessment : 'High Probability'}</span></div>
+                            <div>• <strong>2. Could this become a 5×?</strong> <span style="color:var(--accent-cyan);">${m.q2_could_become_5x ? m.q2_could_become_5x.assessment : 'Tail Outlier Potential'}</span></div>
+                            <div>• <strong>3. Could this become a 10×?</strong> <span style="color:var(--accent-purple);">${m.q3_could_become_10x ? m.q3_could_become_10x.assessment : 'Extreme Outlier Scale'}</span></div>
+                            <div>• <strong>4. Are we early?</strong> <span style="color:var(--accent-emerald);">${m.q4_are_we_early ? m.q4_are_we_early.assessment : 'Early Stage Entry'}</span></div>
+                            <div>• <strong>5. Why could it happen?</strong> <span style="color:var(--text-muted);">${m.q5_why_could_it_happen ? m.q5_why_could_it_happen.drivers[0] : 'High ROCE + FCF Compounding'}</span></div>
+                            <div>• <strong>6. What could invalidate it?</strong> <span style="color:var(--accent-amber);">${m.q6_what_could_invalidate_it ? m.q6_what_could_invalidate_it.friction_factors[0] : 'Macro slowdown'}</span></div>
+                            <div>• <strong>7. Is market already pricing it?</strong> <span style="color:var(--text-muted);">${m.q7_is_market_pricing_it ? m.q7_is_market_pricing_it.valuation_verdict : 'Fairly Valued'}</span></div>
+                            <div>• <strong>8. Can I actually buy it?</strong> <span style="color:var(--accent-cyan);">${m.q8_can_investor_buy_it ? m.q8_can_investor_buy_it.liquidity_verdict : 'Liquid Market'}</span></div>
+                        </div>
+                        <div style="margin-top:0.6rem; padding-top:0.6rem; border-top:1px solid rgba(255,255,255,0.08); font-size:0.76rem; color:var(--text-dim);">
+                            <strong>9. What would make us wrong?</strong> ROCE deteriorates below 15% across two consecutive quarters OR CFO/PAT divergence exceeds 40%.
+                        </div>
+                    </div>
+
+                    <!-- Dual Thesis -->
+                    <div style="display:grid; grid-template-columns:1fr 1fr; gap:1.25rem; margin-bottom:1.5rem;">
+                        <div style="background:rgba(0,255,157,0.05); border:1px solid rgba(0,255,157,0.25); border-radius:8px; padding:1.1rem;">
+                            <div style="font-weight:800; color:var(--accent-emerald); font-size:0.90rem; margin-bottom:0.5rem;">✔ WHY BUY? (POSITIVE CATALYSTS)</div>
+                            <ul style="list-style:none; padding-left:0; font-size:0.82rem; line-height:1.6;">${whyBuyHtml}</ul>
+                        </div>
+                        <div style="background:rgba(255,183,0,0.05); border:1px solid rgba(255,183,0,0.25); border-radius:8px; padding:1.1rem;">
+                            <div style="font-weight:800; color:var(--accent-amber); font-size:0.90rem; margin-bottom:0.5rem;">⚠ WHY NOT BUY? (STRUCTURAL RISKS & FRICTION)</div>
+                            <ul style="list-style:none; padding-left:0; font-size:0.82rem; line-height:1.6;">${whyNotHtml}</ul>
+                        </div>
+                    </div>
+
+                    <!-- Technicals, Shareholding, Liquidity Grid -->
+                    <div style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:1rem;">
+                        <div style="background:rgba(0,0,0,0.3); border:1px solid var(--border-color); border-radius:8px; padding:1rem;">
+                            <div style="font-weight:700; color:var(--accent-cyan); font-size:0.85rem; margin-bottom:0.5rem;">📈 Technical Indicators</div>
+                            <div style="font-size:0.80rem; color:var(--text-muted); line-height:1.6;">
+                                52W Range: <strong>₹${s.low_52w} - ₹${s.high_52w}</strong><br>
+                                50-DMA: <strong>₹${s.dma_50}</strong> (<span style="color:${modalDma50.color}; font-weight:700;">${modalDma50.text}</span>)<br>
+                                200-DMA: <strong>₹${s.dma_200}</strong> (<span style="color:${modalDma200.color}; font-weight:700;">${modalDma200.text}</span>)<br>
+                                1M Return: <span style="color:${modalRet1m.color}; font-weight:700;">${modalRet1m.text}</span> | 1Y: <span style="color:${modalRet1y.color}; font-weight:700;">${modalRet1y.text}</span>
+                            </div>
+                        </div>
+
+                        <div style="background:rgba(0,0,0,0.3); border:1px solid var(--border-color); border-radius:8px; padding:1rem;">
+                            <div style="font-weight:700; color:var(--accent-purple); font-size:0.85rem; margin-bottom:0.5rem;">🏛️ Shareholding & Governance</div>
+                            <div style="font-size:0.80rem; color:var(--text-muted); line-height:1.6;">
+                                Promoter: <strong>${sh.promoter_pct !== undefined && sh.promoter_pct !== null ? sh.promoter_pct + '%' : 'N/A'}</strong> (Pledge: ${sh.promoter_pledge_pct || 0}%)<br>
+                                Institutional: <strong>${sh.institutional_pct !== undefined && sh.institutional_pct !== null ? sh.institutional_pct + '%' : 'N/A'}</strong><br>
+                                FII: <strong>${sh.fii_pct !== undefined && sh.fii_pct !== null ? sh.fii_pct + '%' : 'N/A'}</strong> | DII: <strong>${sh.dii_pct !== undefined && sh.dii_pct !== null ? sh.dii_pct + '%' : 'N/A'}</strong><br>
+                                Status: <span class="badge-tag badge-emerald">${sh.governance_status || 'CLEAN'}</span>
+                            </div>
+                        </div>
+
+                        <div style="background:rgba(0,0,0,0.3); border:1px solid var(--border-color); border-radius:8px; padding:1rem;">
+                            <div style="font-weight:700; color:var(--accent-emerald); font-size:0.85rem; margin-bottom:0.5rem;">💧 Liquidity & Position Sizing</div>
+                            <div style="font-size:0.80rem; color:var(--text-muted); line-height:1.6;">
+                                20D Volume: <strong>${(liq.avg_daily_volume_20 || 0).toLocaleString()} shs</strong><br>
+                                Turnover: <strong>₹${liq.avg_daily_turnover_cr || 0} Cr/day</strong><br>
+                                Max Safe Sizing: <strong style="color:var(--accent-emerald);">₹${liq.max_safe_position_size_cr || 0} Cr</strong><br>
+                                Sizing: <strong style="color:var(--accent-cyan);">${s.sizing_guidance || 'N/A'}</strong>
                             </div>
                         </div>
                     </div>

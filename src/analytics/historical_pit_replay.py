@@ -107,26 +107,62 @@ class HistoricalPITReplayEngine:
             ttm_ebit = sum(q.get("ebit_cr", 0.0) or q.get("operating_profit_cr", 0.0) or 0.0 for q in q_slice[-4:])
             ttm_pat = sum(q.get("net_profit_cr", 0.0) or q.get("pat_cr", 0.0) or 0.0 for q in q_slice[-4:])
 
-            # Price at T0
-            price_row = db.query(DailyPriceRaw).filter(
-                DailyPriceRaw.company_id == comp.company_id,
-                DailyPriceRaw.trading_date <= t0_date
-            ).order_by(DailyPriceRaw.trading_date.desc()).first()
+            # Extract latest available balance sheet primitives at T0
+            latest_q = q_slice[-1]
+            net_worth_t0 = latest_q.get("net_worth") or latest_q.get("net_worth_cr")
+            debt_t0 = latest_q.get("borrowings") or latest_q.get("total_debt") or latest_q.get("total_debt_cr") or 0.0
+            cash_t0 = latest_q.get("cash_and_equivalents") or latest_q.get("cash_and_equivalents_cr") or 0.0
+            depr_t0 = latest_q.get("depreciation_cr") or (ttm_rev * 0.03 if ttm_rev else 5.0)
+            capex_t0 = latest_q.get("capex_cr") or (ttm_rev * 0.05 if ttm_rev else 10.0)
 
-            t0_price = price_row.close_price if price_row else 100.0
-            mcap_t0 = max(100.0, ttm_pat * 30.0 if ttm_pat > 0 else 1000.0)
-            pe_t0 = round(mcap_t0 / max(1.0, ttm_pat), 1) if ttm_pat > 0 else 25.0
+            # Price at T0 (Adjusted for subsequent splits/bonuses to maintain economic continuity)
+            adj_prices_t0 = PriceAdjuster.get_adjusted_prices(
+                db=db,
+                company_id=comp.company_id,
+                start_date=t0_date - timedelta(days=30),
+                end_date=t0_date,
+                as_of_date=t0_date
+            )
 
-            # 3. Calculate 8 Deep Economic Research Lenses at this historical T0
+            t0_price = adj_prices_t0[-1]["adj_close"] if adj_prices_t0 else 100.0
+
+            # Shares outstanding at T0
+            shares_t0 = latest_q.get("shares_outstanding")
+            if not shares_t0 or shares_t0 <= 0:
+                fv = getattr(comp, "face_value", 10.0) or 10.0
+                eq_cap = latest_q.get("equity_capital") or (net_worth_t0 * 0.1 if net_worth_t0 else 10.0)
+                shares_t0 = (eq_cap * 10_000_000.0) / fv if fv > 0 else 10_000_000.0
+
+            mcap_t0 = round((t0_price * shares_t0) / 10_000_000.0, 2) if (t0_price and shares_t0) else (net_worth_t0 or 500.0)
+            pe_t0 = round(mcap_t0 / max(0.1, ttm_pat), 1) if (ttm_pat and ttm_pat > 0) else None
+
+            # 3. Calculate 8 Deep Economic Research Lenses at this historical T0 using authentic PIT facts
             tam_dat = ReverseTAMHurdleEngine.resolve_industry_tam(sym_clean, getattr(comp.sector, "sector_name", "General"))
             tam_res = ReverseTAMHurdleEngine.evaluate_10x_reverse_hurdle(mcap_t0, ttm_rev, ttm_pat, tam_dat["niche_tam_cr"], tam_dat["macro_tam_cr"])
-            roic_res = EconomicROICEngine.calculate_economic_roic(ttm_ebit, 25.0, ttm_rev * 0.5, ttm_rev * 0.2)
-            capex_res = ReinvestmentCalculator.calculate_growth_vs_maintenance_capex(ttm_rev * 0.08, ttm_rev * 0.04, ttm_rev, ttm_rev * 0.85)
-            reinvest_res = ReinvestmentCalculator.calculate_growth_reinvestment_rate(capex_res["growth_capex_cr"], ttm_rev * 0.03, roic_res["nopat_cr"], roic_res["economic_roic_pct"])
+            roic_res = EconomicROICEngine.calculate_economic_roic(
+                ebit_cr=ttm_ebit,
+                tax_rate_pct=25.0,
+                net_worth_cr=net_worth_t0 or (ttm_rev * 0.5 if ttm_rev else 250.0),
+                borrowings_cr=debt_t0,
+                cash_and_equivalents_cr=cash_t0
+            )
+            prev_sales = q_slice[-2].get("revenue_cr", 0.0) if len(q_slice) >= 2 else (ttm_rev * 0.85 if ttm_rev else 0.0)
+            capex_res = ReinvestmentCalculator.calculate_growth_vs_maintenance_capex(
+                total_capex_cr=capex_t0,
+                depreciation_cr=depr_t0,
+                sales_current_cr=ttm_rev,
+                sales_previous_cr=prev_sales
+            )
+            reinvest_res = ReinvestmentCalculator.calculate_growth_reinvestment_rate(
+                growth_capex_cr=capex_res["growth_capex_cr"],
+                delta_working_capital_cr=0.0,
+                nopat_cr=roic_res["nopat_cr"],
+                incremental_roic_pct=roic_res["economic_roic_pct"]
+            )
             accel_res = EarningsAccelerationEngine.calculate_acceleration_vector(q_slice) if len(q_slice) >= 6 else {"is_earnings_accelerating": False, "revenue_acceleration_pct_points": 0.0, "pat_acceleration_pct_points": 0.0, "acceleration_persistence_quarters": 0}
-            moat_res = CompetitivePositionEngine.evaluate_displacement_dynamics(sym_clean, getattr(comp.sector, "sector_name", "General"), accel_res.get("latest_revenue_yoy_pct", 20.0))
-            latent_res = LatentUpsideEngine.calculate_latent_upside_map(ttm_rev, ttm_ebit, ttm_pat, mcap_t0, 20.0)
-            coords_res = LifecycleClassifier.calculate_continuous_lifecycle_coordinates(mcap_t0, accel_res.get("latest_revenue_yoy_pct", 20.0), accel_res.get("latest_pat_yoy_pct", 25.0), 20.0, 10.0, pe_t0)
+            moat_res = CompetitivePositionEngine.evaluate_displacement_dynamics(sym_clean, getattr(comp.sector, "sector_name", "General"), accel_res.get("latest_revenue_yoy_pct", 15.0))
+            latent_res = LatentUpsideEngine.calculate_latent_upside_map(ttm_rev, ttm_ebit, ttm_pat, mcap_t0, roic_res["economic_roic_pct"] or 15.0)
+            coords_res = LifecycleClassifier.calculate_continuous_lifecycle_coordinates(mcap_t0, accel_res.get("latest_revenue_yoy_pct", 15.0), accel_res.get("latest_pat_yoy_pct", 15.0), roic_res["economic_roic_pct"] or 15.0, 10.0, pe_t0 or 25.0)
 
             # Canonical input and output hashing (Audit Invariant H)
             input_payload = {"ttm_revenue": ttm_rev, "ttm_ebit": ttm_ebit, "ttm_pat": ttm_pat, "pe": pe_t0, "t0_date": str(t0_date)}
@@ -194,19 +230,32 @@ class HistoricalPITReplayEngine:
             db.add(rf_snap)
             snapshots_created += 1
 
-            # 4. Calculate Forward Realization Outcomes (if historical price runway exists)
-            forward_prices = db.query(DailyPriceRaw).filter(
-                DailyPriceRaw.company_id == comp.company_id,
-                DailyPriceRaw.trading_date > t0_date
-            ).order_by(DailyPriceRaw.trading_date.asc()).all()
+            # 4. Calculate Forward Realization Outcomes on Continuous Split-Adjusted Prices
+            adj_forward_prices = PriceAdjuster.get_adjusted_prices(
+                db=db,
+                company_id=comp.company_id,
+                start_date=t0_date,
+                end_date=date.today()
+            )
 
-            if forward_prices and len(forward_prices) >= 60: # At least 3 months of forward history
-                max_future_price = max(p.high_price or p.close_price for p in forward_prices)
-                min_future_price = min(p.low_price or p.close_price for p in forward_prices)
-                latest_future_price = forward_prices[-1].close_price
+            if adj_forward_prices and len(adj_forward_prices) >= 30:
+                base_p = adj_forward_prices[0]["adj_close"]
+                running_peak = base_p
+                max_gain_pct = 0.0
+                max_drawdown_pct = 0.0
 
-                max_gain_pct = round(((max_future_price - t0_price) / max(0.1, t0_price)) * 100.0, 2)
-                max_dd_pct = round(((min_future_price - t0_price) / max(0.1, t0_price)) * 100.0, 2)
+                for p_item in adj_forward_prices:
+                    ap = p_item["adj_close"]
+                    if ap > running_peak:
+                        running_peak = ap
+                    dd = ((ap - running_peak) / running_peak) * 100.0
+                    if dd < max_drawdown_pct:
+                        max_drawdown_pct = dd
+                    gain = ((ap - base_p) / base_p) * 100.0
+                    if gain > max_gain_pct:
+                        max_gain_pct = gain
+
+                latest_future_price = adj_forward_prices[-1]["adj_close"]
 
                 # Binary Realization Labels
                 is_2x = (max_gain_pct >= 100.0)
@@ -215,19 +264,33 @@ class HistoricalPITReplayEngine:
 
                 # Total Shareholder Wealth Compounding
                 wealth_w0 = 100.0
-                wealth_wt = round(wealth_w0 * (1.0 + (latest_future_price - t0_price) / max(0.1, t0_price)), 4)
-                total_wealth_ret = round(((latest_future_price - t0_price) / max(0.1, t0_price)) * 100.0, 2)
+                wealth_wt = round(wealth_w0 * (1.0 + (latest_future_price - base_p) / max(0.1, base_p)), 4)
+                total_wealth_ret = round(((latest_future_price - base_p) / max(0.1, base_p)) * 100.0, 2)
 
                 # Generic Half-Open Outcome Interval (Audit Invariant E)
                 outcome_start = t0_date
-                outcome_end = forward_prices[-1].trading_date
+                outcome_end = adj_forward_prices[-1]["trading_date"]
 
                 # Competing Risk Event & Censoring Classification
                 event_name = "10X" if is_10x else ("5X" if is_5x else ("2X" if is_2x else None))
-                censoring_flag = "EVENT_OBSERVED" if (is_2x or is_5x or is_10x) else ("MATURE" if len(forward_prices) >= 756 else "RIGHT_CENSORED")
+                censoring_flag = "EVENT_OBSERVED" if (is_2x or is_5x or is_10x) else ("MATURE" if len(adj_forward_prices) >= 756 else "RIGHT_CENSORED")
                 elapsed_days = int((outcome_end - outcome_start).days)
 
-                # Link with DecisionSnapshot placeholder to maintain schema integrity
+                # Point-in-Time Decision Score from historical T0 facts (Zero-Lookahead Invariant)
+                # Derived strictly from PIT features at T0 without future realization knowledge
+                t0_roce = roic_res.get("economic_roic_pct") or 15.0
+                t0_accel = accel_res.get("is_earnings_accelerating", False)
+                pit_score = 50
+                if t0_roce >= 20.0 and t0_accel:
+                    pit_score = 80
+                    pit_verdict = "CONVICTION_BUY"
+                elif t0_roce >= 15.0 or t0_accel:
+                    pit_score = 65
+                    pit_verdict = "ACCUMULATE_ON_DIPS"
+                else:
+                    pit_score = 45
+                    pit_verdict = "WATCHLIST"
+
                 d_snap = DecisionSnapshot(
                     snapshot_id=str(uuid.uuid4()),
                     company_id=comp.company_id,
@@ -235,9 +298,9 @@ class HistoricalPITReplayEngine:
                     feature_set_version="v2.4.0_HISTORICAL_REPLAY",
                     model_version="M6_FROZEN_EXP004",
                     dataset_hash="SHA256_HISTORICAL_AUDITED_LINEAGE",
-                    raw_features_payload={"ttm_revenue": ttm_rev, "ttm_pat": ttm_pat, "pe": pe_t0},
-                    m6_score=75.0 if is_2x else 45.0,
-                    verdict="CONVICTION_BUY" if is_2x else "WATCHLIST"
+                    raw_features_payload={"ttm_revenue": ttm_rev, "ttm_pat": ttm_pat, "pe": pe_t0, "economic_roic": t0_roce},
+                    m6_score=pit_score,
+                    verdict=pit_verdict
                 )
                 db.add(d_snap)
 
@@ -246,7 +309,7 @@ class HistoricalPITReplayEngine:
                     snapshot_id=d_snap.snapshot_id,
                     company_id=comp.company_id,
                     t0_date=t0_date,
-                    t0_price=t0_price,
+                    t0_price=base_p,
                     market_cap_at_t0_cr=mcap_t0,
                     wealth_start=wealth_w0,
                     wealth_end=wealth_wt,
@@ -260,7 +323,7 @@ class HistoricalPITReplayEngine:
                     censoring_status=censoring_flag,
                     event_time_days=elapsed_days,
                     max_forward_return_pct=max_gain_pct,
-                    max_drawdown_pct=max_dd_pct,
+                    max_drawdown_pct=max_drawdown_pct,
                     is_multibagger_2x=is_2x,
                     is_multibagger_5x=is_5x,
                     is_multibagger_10x=is_10x

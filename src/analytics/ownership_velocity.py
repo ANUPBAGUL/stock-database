@@ -32,10 +32,36 @@ class OwnershipVelocityEngine:
                 "institutional_velocity_trend": "FLAT",
             }
 
-        sh = sorted(shareholding_history, key=lambda x: x.get("period_end_date", ""))
+        sh = sorted(shareholding_history, key=lambda x: str(x.get("period_end_date", "")))
         curr = sh[-1]
         prev_1q = sh[-2]
-        prev_1y = sh[-5] if len(sh) >= 5 else sh[0]
+
+        def _find_sh_1y():
+            c_ped = curr.get("period_end_date")
+            if not c_ped:
+                return sh[-5] if len(sh) >= 5 else sh[0]
+            if isinstance(c_ped, str):
+                try:
+                    from datetime import datetime as dt
+                    c_dt = dt.strptime(c_ped[:10], "%Y-%m-%d").date()
+                except Exception:
+                    return sh[-5] if len(sh) >= 5 else sh[0]
+            elif hasattr(c_ped, "year"):
+                c_dt = c_ped
+            else:
+                return sh[-5] if len(sh) >= 5 else sh[0]
+
+            t_year = c_dt.year - 1
+            t_month = c_dt.month
+            for cand in sh:
+                cand_ped = cand.get("period_end_date")
+                if not cand_ped: continue
+                cand_dt = dt.strptime(cand_ped[:10], "%Y-%m-%d").date() if isinstance(cand_ped, str) else cand_ped
+                if hasattr(cand_dt, "year") and cand_dt.year == t_year and cand_dt.month == t_month:
+                    return cand
+            return sh[-5] if len(sh) >= 5 else sh[0]
+
+        prev_1y = _find_sh_1y()
 
         curr_fii = curr.get("fii_holding_pct", 0.0) or 0.0
         curr_dii = curr.get("dii_holding_pct", 0.0) or 0.0

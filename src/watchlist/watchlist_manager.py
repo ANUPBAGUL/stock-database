@@ -132,7 +132,40 @@ NAME_TO_TICKER = {
     "JIO FINANCIAL": "JIOFIN",
     "JIOFIN": "JIOFIN",
     "VARUN BEVERAGES": "VBL",
-    "VBL": "VBL"
+    "VBL": "VBL",
+    "ANGEL ONE": "ANGELONE",
+    "ANGELONE": "ANGELONE",
+    "MANORAMA": "MANORAMA",
+    "MANORAMA INDUSTRIES": "MANORAMA",
+    "DIVIS": "DIVISLAB",
+    "DIVIS LAB": "DIVISLAB",
+    "DIVIS LABORATORIES": "DIVISLAB",
+    "DIVI'S LAB": "DIVISLAB",
+    "DIVISLAB": "DIVISLAB",
+    "DEEPAK NITRITE": "DEEPAKNTR",
+    "DEEPAKNTR": "DEEPAKNTR",
+    "AARTI INDUSTRIES": "AARTIIND",
+    "AARTIIND": "AARTIIND",
+    "NEULAND": "NEULANDLAB",
+    "NEULAND LABS": "NEULANDLAB",
+    "NEULANDLAB": "NEULANDLAB",
+    "AMBER ENTERPRISES": "AMBER",
+    "AMBER": "AMBER",
+    "SYRMA SGS": "SYRMA",
+    "SYRMA": "SYRMA",
+    "PG ELECTROPLAST": "PGEL",
+    "PGEL": "PGEL",
+    "ADANI ENERGY": "ADANIENSOL",
+    "ADANI ENERGY SOLUTIONS": "ADANIENSOL",
+    "ADANIENSOL": "ADANIENSOL",
+    "NCC": "NCC",
+    "NCC LIMITED": "NCC",
+    "DHFL": "DHFL",
+    "SINTEX": "SINTEX",
+    "RCOM": "RCOM",
+    "UNITECH": "UNITECH",
+    "GTL INFRA": "GTLINFRA",
+    "GTLINFRA": "GTLINFRA"
 }
 
 
@@ -168,9 +201,32 @@ class WatchlistManager:
             
             words = tok_clean.split()
             normalized_phrase = " ".join(words).upper()
+            compressed_phrase = re.sub(r'[^A-Z0-9]', '', normalized_phrase)
+
             if normalized_phrase in NAME_TO_TICKER:
                 candidates.append(NAME_TO_TICKER[normalized_phrase])
                 continue
+
+            if compressed_phrase in NAME_TO_TICKER:
+                candidates.append(NAME_TO_TICKER[compressed_phrase])
+                continue
+
+            # Remove trailing stop words from phrase (e.g. 'MANORAMA INDUSTRIES' -> 'MANORAMA')
+            non_stop_words = [w for w in words if re.sub(r'[^A-Za-z0-9&\-]', '', w).upper() not in STOP_WORDS]
+            if non_stop_words:
+                cleaned_phrase = " ".join(non_stop_words).upper()
+                if cleaned_phrase in NAME_TO_TICKER:
+                    candidates.append(NAME_TO_TICKER[cleaned_phrase])
+                    continue
+                compressed_clean = re.sub(r'[^A-Z0-9]', '', cleaned_phrase)
+                if compressed_clean in NAME_TO_TICKER:
+                    candidates.append(NAME_TO_TICKER[compressed_clean])
+                    continue
+                if len(non_stop_words) == 1:
+                    single_sym = re.sub(r'[^A-Za-z0-9]', '', non_stop_words[0]).upper()
+                    if len(single_sym) >= 2 and len(single_sym) <= 15:
+                        candidates.append(single_sym)
+                        continue
 
             for w in words:
                 clean_w = re.sub(r'[^A-Za-z0-9&\-]', '', w).upper()
@@ -178,7 +234,7 @@ class WatchlistManager:
                     continue
                 if clean_w in NAME_TO_TICKER:
                     candidates.append(NAME_TO_TICKER[clean_w])
-                elif len(clean_w) >= 2 and len(clean_w) <= 15 and clean_w.isalnum():
+                elif len(clean_w) >= 2 and len(clean_w) <= 15 and clean_w.isalnum() and len(words) == 1:
                     candidates.append(clean_w)
 
         seen = set()
@@ -330,12 +386,13 @@ class WatchlistManager:
                             publication_date=pub_dt,
                             source="SCREENER_XBRL_QUARTERS",
                             metrics={
-                                "revenue": qf.get("revenue_cr"),
-                                "ebit": qf.get("ebit_cr"),
-                                "ebitda": qf.get("ebit_cr"),
-                                "pat": qf.get("pat_cr"),
+                                "revenue": qf.get("revenue_cr") or qf.get("sales_cr"),
+                                "ebit": qf.get("ebit_cr") or qf.get("operating_profit_cr"),
+                                "ebitda": qf.get("ebitda_cr") or qf.get("operating_profit_cr"),
+                                "depreciation": qf.get("depreciation_cr"),
+                                "pat": qf.get("pat_cr") or qf.get("net_profit_cr"),
                                 "eps": qf.get("eps"),
-                                "operating_cash_flow": qf.get("pat_cr"),
+                                "operating_cash_flow": qf.get("operating_cash_flow_cr"),
                                 "consolidation_scope": qf.get("consolidation_scope", "CONSOLIDATED")
                             }
                         )
@@ -454,12 +511,18 @@ class WatchlistManager:
                     source_type = ann.get("source_type", "OFFICIAL_EXCHANGE_FILING")
                     is_m6_eligible = ann.get("is_m6_eligible", True)
 
+                    # Dynamic company TTM revenue lookup
+                    comp_fin = db.query(BitemporalFinancial).filter_by(
+                        company_id=company.company_id, period_type="QUARTERLY"
+                    ).order_by(BitemporalFinancial.period_end_date.desc()).limit(4).all()
+                    comp_ttm_rev = sum(f.revenue for f in comp_fin if f.revenue is not None) if comp_fin else 1000.0
+
                     # Score and decay
                     score_val, val_cr, track_type = AnnouncementDecayEngine.score_announcement(
                         event_type=ann.get("event_type") or ann.get("category", "GENERAL_FILING"),
                         headline=headline,
                         summary=ann.get("summary") or headline,
-                        ttm_revenue_cr=2000.0
+                        ttm_revenue_cr=comp_ttm_rev or 1000.0
                     )
                     decayed_score, status = AnnouncementDecayEngine.calculate_decayed_score(
                         raw_score=score_val,
@@ -595,84 +658,99 @@ class WatchlistManager:
                     from src.analytics.lifecycle_classifier import LifecycleClassifier
                     from src.analytics.latent_upside_engine import LatentUpsideEngine
 
-                    # Compute all 8 economic research lenses
-                    rev = pit_features.get("ttm_revenue_cr", 500.0)
-                    pat = pit_features.get("ttm_pat_cr", rev * 0.10)
-                    ebit = pit_features.get("ttm_ebit_cr", rev * 0.15)
-                    pe = pit_features.get("trailing_pe", 25.0)
-                    mcap = max(100.0, pe * pat)
+                    # Compute all 8 economic research lenses using authentic primitives strictly
+                    rev = pit_features.get("ttm_revenue")
+                    pat = pit_features.get("ttm_pat")
+                    ebit = pit_features.get("ttm_ebit")
+                    pe = pit_features.get("pe_ratio")
+                    mcap = pit_features.get("market_cap_crores")
+                    nw = pit_features.get("net_worth")
+                    debt = pit_features.get("total_debt") or 0.0
+                    cash = pit_features.get("cash_and_equivalents") or 0.0
+                    capex_val = pit_features.get("ttm_capex") or 0.0
+                    depr_val = pit_features.get("ttm_depreciation") or 0.0
 
-                    tam_dat = ReverseTAMHurdleEngine.resolve_industry_tam(symbol, getattr(company.sector, "sector_name", "General"))
-                    tam_res = ReverseTAMHurdleEngine.evaluate_10x_reverse_hurdle(mcap, rev, pat, tam_dat["niche_tam_cr"], tam_dat["macro_tam_cr"])
-                    roic_res = EconomicROICEngine.calculate_economic_roic(ebit, 25.0, rev * 0.5, rev * 0.2)
-                    capex_res = ReinvestmentCalculator.calculate_growth_vs_maintenance_capex(rev * 0.08, rev * 0.04, rev, rev * 0.85)
-                    reinvest_res = ReinvestmentCalculator.calculate_growth_reinvestment_rate(capex_res["growth_capex_cr"], rev * 0.03, roic_res["nopat_cr"], roic_res["economic_roic_pct"])
-                    moat_res = CompetitivePositionEngine.evaluate_displacement_dynamics(symbol, getattr(company.sector, "sector_name", "General"), pit_features.get("revenue_growth_yoy_pct", 20.0))
-                    latent_res = LatentUpsideEngine.calculate_latent_upside_map(rev, ebit, pat, mcap, pit_features.get("ttm_roce_pct", 20.0))
-                    coords_res = LifecycleClassifier.calculate_continuous_lifecycle_coordinates(mcap, pit_features.get("revenue_growth_yoy_pct", 20.0), pit_features.get("pat_growth_yoy_pct", 25.0), pit_features.get("ttm_roce_pct", 20.0), 10.0, pe)
+                    # Zero-fabrication check: only record ResearchFeatureSnapshot if authentic primitives exist
+                    if rev is not None and ebit is not None and mcap is not None and mcap > 0 and nw is not None:
+                        tam_dat = ReverseTAMHurdleEngine.resolve_industry_tam(symbol, getattr(company.sector, "sector_name", "General"))
+                        tam_res = ReverseTAMHurdleEngine.evaluate_10x_reverse_hurdle(mcap, rev, pat or 0.0, tam_dat["niche_tam_cr"], tam_dat["macro_tam_cr"])
+                        roic_res = EconomicROICEngine.calculate_economic_roic(ebit, 25.0, nw, debt, cash)
+                        capex_res = ReinvestmentCalculator.calculate_growth_vs_maintenance_capex(capex_val, depr_val, rev, rev * 0.85)
+                        reinvest_res = ReinvestmentCalculator.calculate_growth_reinvestment_rate(capex_res["growth_capex_cr"], 0.0, roic_res["nopat_cr"], roic_res["economic_roic_pct"])
+                        moat_res = CompetitivePositionEngine.evaluate_displacement_dynamics(symbol, getattr(company.sector, "sector_name", "General"), pit_features.get("revenue_yoy_growth_pct", 15.0) or 15.0)
+                        latent_res = LatentUpsideEngine.calculate_latent_upside_map(rev, ebit, pat or 0.0, mcap, pit_features.get("roce_pct", 15.0) or 15.0)
+                        coords_res = LifecycleClassifier.calculate_continuous_lifecycle_coordinates(mcap, pit_features.get("revenue_yoy_growth_pct", 15.0) or 15.0, pit_features.get("pat_yoy_growth_pct", 15.0) or 15.0, pit_features.get("roce_pct", 15.0) or 15.0, 10.0, pe or 25.0)
 
-                    from src.analytics.canonical_hasher import compute_canonical_hash
-                    in_h = compute_canonical_hash(pit_features)
-                    out_h = compute_canonical_hash(coords_res)
+                        from src.analytics.canonical_hasher import compute_canonical_hash
+                        in_h = compute_canonical_hash(pit_features)
+                        out_h = compute_canonical_hash(coords_res)
 
-                    # Deduplicate: Check if snapshot exists for this company on today's date
-                    existing_snap = db.query(ResearchFeatureSnapshot).filter_by(company_id=company.company_id, observation_date=today).first()
-                    if not existing_snap:
-                        rf_snap = ResearchFeatureSnapshot(
-                            snapshot_id=str(uuid.uuid4()),
-                            company_id=company.company_id,
-                            observation_date=today,
-                            t0_timestamp=datetime.utcnow(),
-                            source_fact_ids=["LIVE_FEED_OBSERVATION"],
-                            source_published_at=datetime.utcnow(),
-                            source_period_end=today,
-                            feature_engine_version="v3.2.0",
-                            peer_selection_version="v1.0.0",
-                            methodology_version="INSTITUTIONAL_P0",
-                            input_hash=in_h,
-                            output_hash=out_h,
-                            economic_roic_pct=roic_res["economic_roic_pct"],
-                            capex_total_cr=capex_res["total_capex_cr"],
-                            growth_capex_cr=capex_res["growth_capex_cr"],
-                            maintenance_capex_cr=capex_res["maintenance_capex_cr"],
-                            growth_reinvestment_rate_pct=reinvest_res["growth_reinvestment_rate_pct"],
-                            organic_compounding_ceiling_pct=reinvest_res["organic_compounding_ceiling_pct"],
-                            maintenance_capex_method=capex_res["maintenance_capex_method"],
-                            maintenance_capex_confidence=capex_res["maintenance_capex_confidence"],
-                            niche_tam_cr=tam_res["niche_tam_cr"],
-                            macro_tam_cr=tam_res["macro_tam_cr"],
-                            sam_cr=tam_res["sam_serviceable_cr"],
-                            som_cr=tam_res["som_obtainable_cr"],
-                            current_niche_share_pct=tam_res["current_niche_market_share_pct"],
-                            required_10x_niche_share_pct=tam_res["required_niche_market_share_pct"],
-                            tam_feasibility=tam_res["feasibility"],
-                            is_10x_plausible=tam_res["is_10x_plausible"],
-                            displacement_mode=moat_res["displacement_mode"],
-                            moat_rating=moat_res["economic_moat_rating"],
-                            scale_coord=coords_res["scale_coordinate"],
-                            reinvestment_coord=coords_res["reinvestment_intensity_coordinate"],
-                            efficiency_coord=coords_res["capital_efficiency_coordinate"],
-                            operating_leverage_coord=coords_res["operating_leverage_coordinate"],
-                            float_discovery_coord=coords_res["institutional_discovery_coordinate"],
-                            valuation_coord=coords_res["valuation_rerating_coordinate"],
-                            transition_signature=coords_res["transition_signature"],
-                            operational_leverage_multiplier=latent_res["operational_leverage_multiplier"],
-                            distance_to_excellence_score=latent_res["distance_to_excellence_score"],
-                            potential_pat_excellence_cr=latent_res["potential_pat_at_excellence_cr"],
-                            latent_evidence_source=latent_res["evidence_source"],
-                            latent_evidence_confidence=latent_res["evidence_confidence"],
-                            feature_vector_json=json.dumps(pit_features)
-                        )
-                        db.add(rf_snap)
-                        db.commit()
-                        logger.info(f"[Research Feature Store] Persisted T0 vector {rf_snap.snapshot_id} for {symbol}.")
+                        # Deduplicate: Check if snapshot exists for this company on today's date
+                        existing_snap = db.query(ResearchFeatureSnapshot).filter_by(company_id=company.company_id, observation_date=today).first()
+                        if not existing_snap:
+                            rf_snap = ResearchFeatureSnapshot(
+                                snapshot_id=str(uuid.uuid4()),
+                                company_id=company.company_id,
+                                observation_date=today,
+                                t0_timestamp=datetime.utcnow(),
+                                source_fact_ids=["LIVE_FEED_OBSERVATION"],
+                                source_published_at=datetime.utcnow(),
+                                source_period_end=today,
+                                feature_engine_version="v3.2.0",
+                                peer_selection_version="v1.0.0",
+                                methodology_version="INSTITUTIONAL_P0",
+                                input_hash=in_h,
+                                output_hash=out_h,
+                                economic_roic_pct=roic_res["economic_roic_pct"],
+                                capex_total_cr=capex_res["total_capex_cr"],
+                                growth_capex_cr=capex_res["growth_capex_cr"],
+                                maintenance_capex_cr=capex_res["maintenance_capex_cr"],
+                                growth_reinvestment_rate_pct=reinvest_res["growth_reinvestment_rate_pct"],
+                                organic_compounding_ceiling_pct=reinvest_res["organic_compounding_ceiling_pct"],
+                                maintenance_capex_method=capex_res["maintenance_capex_method"],
+                                maintenance_capex_confidence=capex_res["maintenance_capex_confidence"],
+                                niche_tam_cr=tam_res["niche_tam_cr"],
+                                macro_tam_cr=tam_res["macro_tam_cr"],
+                                sam_cr=tam_res["sam_serviceable_cr"],
+                                som_cr=tam_res["som_obtainable_cr"],
+                                current_niche_share_pct=tam_res["current_niche_market_share_pct"],
+                                required_10x_niche_share_pct=tam_res["required_niche_market_share_pct"],
+                                tam_feasibility=tam_res["feasibility"],
+                                is_10x_plausible=tam_res["is_10x_plausible"],
+                                displacement_mode=moat_res["displacement_mode"],
+                                moat_rating=moat_res["economic_moat_rating"],
+                                scale_coord=coords_res["scale_coordinate"],
+                                reinvestment_coord=coords_res["reinvestment_intensity_coordinate"],
+                                efficiency_coord=coords_res["capital_efficiency_coordinate"],
+                                operating_leverage_coord=coords_res["operating_leverage_coordinate"],
+                                float_discovery_coord=coords_res["institutional_discovery_coordinate"],
+                                valuation_coord=coords_res["valuation_rerating_coordinate"],
+                                transition_signature=coords_res["transition_signature"],
+                                operational_leverage_multiplier=latent_res["operational_leverage_multiplier"],
+                                distance_to_excellence_score=latent_res["distance_to_excellence_score"],
+                                potential_pat_excellence_cr=latent_res["potential_pat_at_excellence_cr"],
+                                latent_evidence_source=latent_res["evidence_source"],
+                                latent_evidence_confidence=latent_res["evidence_confidence"],
+                                feature_vector_json=json.dumps(pit_features)
+                            )
+                            db.add(rf_snap)
+                            db.commit()
+                            logger.info(f"[Research Feature Store] Persisted T0 vector {rf_snap.snapshot_id} for {symbol}.")
                 except Exception as e:
                     logger.warning(f"[Research Feature Store] Error persisting feature snapshot for {symbol}: {e}")
 
             except Exception as e:
                 logger.warning(f"[Snapshot] Could not record T0 snapshot for {symbol}: {e}")
 
-        # 7. Extract Technicals & Additional Price Stats
+        # 7. Extract Split-Adjusted Technicals & Price Stats
+        from src.analytics.price_adjuster import PriceAdjuster
+        adj_prices = PriceAdjuster.get_adjusted_prices(
+            db=db,
+            company_id=company.company_id,
+            start_date=today - timedelta(days=400),
+            end_date=today
+        )
+
         prices = db.query(DailyPriceRaw).filter(
             DailyPriceRaw.company_id == company.company_id,
             DailyPriceRaw.trading_date <= today
@@ -681,7 +759,12 @@ class WatchlistManager:
         if live_quote and live_quote.get("last_price"):
             cur_price = round(float(live_quote["last_price"]), 2)
             prev_price = None
-            if prices:
+            if adj_prices and len(adj_prices) > 1:
+                if adj_prices[-1]["trading_date"] == today:
+                    prev_price = adj_prices[-2]["adj_close"]
+                else:
+                    prev_price = adj_prices[-1]["adj_close"]
+            elif prices:
                 if prices[0].trading_date == today and len(prices) > 1:
                     prev_price = prices[1].close_price
                 else:
@@ -704,26 +787,56 @@ class WatchlistManager:
             else:
                 day_chg_pct = 0.0
         else:
-            cur_price = prices[0].close_price if prices else intel.get("current_price", 1000.0)
-            prev_price = prices[1].close_price if len(prices) > 1 else cur_price
+            cur_price = adj_prices[-1]["adj_close"] if adj_prices else (prices[0].close_price if prices else intel.get("current_price", 1000.0))
+            prev_price = adj_prices[-2]["adj_close"] if len(adj_prices) > 1 else (prices[1].close_price if len(prices) > 1 else cur_price)
             day_chg_inr = round(cur_price - prev_price, 2)
             day_chg_pct = round((day_chg_inr / max(0.01, prev_price)) * 100, 2)
 
-        high_52w = max([p.high_price for p in prices]) if prices else cur_price * 1.2
-        low_52w = min([p.low_price for p in prices]) if prices else cur_price * 0.8
+        # 52-week High/Low on continuous split-adjusted basis
+        lookback_len = min(len(adj_prices), 252) if adj_prices else 0
+        if adj_prices and lookback_len > 0:
+            high_52w = max(p["adj_high"] for p in adj_prices[-lookback_len:])
+            low_52w = min(p["adj_low"] for p in adj_prices[-lookback_len:])
+        elif prices:
+            high_52w = max(p.high_price for p in prices)
+            low_52w = min(p.low_price for p in prices)
+        else:
+            high_52w = cur_price * 1.2
+            low_52w = cur_price * 0.8
+
         dist_52w_high_pct = round(((cur_price - high_52w) / max(0.01, high_52w)) * 100, 2)
 
-        # Moving Averages
-        dma_50 = sum([p.close_price for p in prices[:50]]) / max(1, len(prices[:50])) if prices else cur_price
-        dma_200 = sum([p.close_price for p in prices[:200]]) / max(1, len(prices[:200])) if prices else cur_price
+        # Moving Averages on continuous split-adjusted basis
+        if adj_prices:
+            closes_adj = [p["adj_close"] for p in adj_prices]
+            dma_50 = sum(closes_adj[-50:]) / max(1, len(closes_adj[-50:]))
+            dma_200 = sum(closes_adj[-200:]) / max(1, len(closes_adj[-200:]))
+        elif prices:
+            dma_50 = sum([p.close_price for p in prices[:50]]) / max(1, len(prices[:50]))
+            dma_200 = sum([p.close_price for p in prices[:200]]) / max(1, len(prices[:200]))
+        else:
+            dma_50 = cur_price
+            dma_200 = cur_price
+
         dist_50_dma_pct = round(((cur_price - dma_50) / max(0.01, dma_50)) * 100, 2)
         dist_200_dma_pct = round(((cur_price - dma_200) / max(0.01, dma_200)) * 100, 2)
 
-        # Returns over horizons
-        ret_1w = round(((cur_price - prices[min(5, len(prices)-1)].close_price) / max(0.01, prices[min(5, len(prices)-1)].close_price)) * 100, 2) if len(prices) > 5 else 0.0
-        ret_1m = round(((cur_price - prices[min(21, len(prices)-1)].close_price) / max(0.01, prices[min(21, len(prices)-1)].close_price)) * 100, 2) if len(prices) > 21 else 0.0
-        ret_3m = round(((cur_price - prices[min(63, len(prices)-1)].close_price) / max(0.01, prices[min(63, len(prices)-1)].close_price)) * 100, 2) if len(prices) > 63 else 0.0
-        ret_1y = round(((cur_price - prices[-1].close_price) / max(0.01, prices[-1].close_price)) * 100, 2) if len(prices) > 200 else 0.0
+        # Split-adjusted Returns over horizons
+        if adj_prices and len(adj_prices) > 1:
+            p_1w = adj_prices[max(0, len(adj_prices) - 6)]["adj_close"]
+            p_1m = adj_prices[max(0, len(adj_prices) - 22)]["adj_close"]
+            p_3m = adj_prices[max(0, len(adj_prices) - 64)]["adj_close"]
+            p_1y = adj_prices[0]["adj_close"] if len(adj_prices) >= 200 else cur_price
+
+            ret_1w = round(((cur_price - p_1w) / max(0.01, p_1w)) * 100, 2) if len(adj_prices) > 5 else 0.0
+            ret_1m = round(((cur_price - p_1m) / max(0.01, p_1m)) * 100, 2) if len(adj_prices) > 21 else 0.0
+            ret_3m = round(((cur_price - p_3m) / max(0.01, p_3m)) * 100, 2) if len(adj_prices) > 63 else 0.0
+            ret_1y = round(((cur_price - p_1y) / max(0.01, p_1y)) * 100, 2) if len(adj_prices) >= 200 else 0.0
+        else:
+            ret_1w = round(((cur_price - prices[min(5, len(prices)-1)].close_price) / max(0.01, prices[min(5, len(prices)-1)].close_price)) * 100, 2) if len(prices) > 5 else 0.0
+            ret_1m = round(((cur_price - prices[min(21, len(prices)-1)].close_price) / max(0.01, prices[min(21, len(prices)-1)].close_price)) * 100, 2) if len(prices) > 21 else 0.0
+            ret_3m = round(((cur_price - prices[min(63, len(prices)-1)].close_price) / max(0.01, prices[min(63, len(prices)-1)].close_price)) * 100, 2) if len(prices) > 63 else 0.0
+            ret_1y = round(((cur_price - prices[-1].close_price) / max(0.01, prices[-1].close_price)) * 100, 2) if len(prices) > 200 else 0.0
 
         lt = intel.get("horizon_ratings", {}).get("longterm", {})
         sw = intel.get("horizon_ratings", {}).get("swing", {})
@@ -750,9 +863,87 @@ class WatchlistManager:
         else:
             promoter_p = float(sh_data.get("promoter_holding_pct")) if sh_data.get("promoter_holding_pct") is not None else None
             pledge_p = float(sh_data.get("promoter_pledge_pct") or 0.0)
-            fii_p = float(sh_data.get("fii_holding_pct")) if sh_data.get("fii_holding_pct") is not None else None
-            dii_p = float(sh_data.get("dii_holding_pct")) if sh_data.get("dii_holding_pct") is not None else None
-            inst_p = round((fii_p or 0.0) + (dii_p or 0.0), 2)
+        # Valuation Assessment via Layer 5 3-Pillar ValuationEngine
+        from src.analytics.valuation_engine import ValuationEngine
+        from src.analytics.trajectory_inflection import TrajectoryInflectionEngine
+        fcf_cr = None
+        if lt.get("fcf_yield_pct") is not None and lt.get("market_cap_cr") is not None:
+            fcf_cr = (lt["fcf_yield_pct"] / 100.0) * lt["market_cap_cr"]
+
+        val_eval = ValuationEngine.evaluate_valuation(
+            pe_ratio=lt.get("pe_ratio"),
+            pb_ratio=lt.get("pb_ratio"),
+            eps_growth_pct=lt.get("pat_growth_yoy") if lt.get("pat_growth_yoy") is not None else lt.get("revenue_growth_yoy"),
+            roce_pct=lt.get("roce_pct"),
+            ttm_fcf_cr=fcf_cr,
+            market_cap_cr=lt.get("market_cap_cr"),
+            debt_to_equity=lt.get("debt_to_equity"),
+            pe_percentile_3y=50.0
+        )
+
+        # 5-Pillar Multibagger Discovery & Trajectory Inflection Synthesis
+        fin_records = db.query(BitemporalFinancial).filter(
+            BitemporalFinancial.company_id == company.company_id
+        ).order_by(BitemporalFinancial.period_end_date.asc()).all()
+
+        ebitda_hist = [f.ebitda for f in fin_records if f.ebitda is not None]
+        margin_hist = [round((f.ebitda / f.revenue) * 100.0, 2) for f in fin_records if f.ebitda is not None and f.revenue and f.revenue > 0]
+        dso_hist = [round((f.trade_receivables / f.revenue) * 365.0, 2) for f in fin_records if f.trade_receivables is not None and f.revenue and f.revenue > 0]
+
+        latest_fin = fin_records[-1] if fin_records else None
+        curr_receivables = latest_fin.trade_receivables if latest_fin else None
+        curr_inventories = latest_fin.inventories if latest_fin else None
+        curr_payables = latest_fin.trade_payables if latest_fin else None
+        curr_cfo = latest_fin.operating_cash_flow if latest_fin else None
+        curr_ebitda = latest_fin.ebitda if latest_fin else None
+        curr_gross_block = latest_fin.ppe_gross if latest_fin else None
+        curr_cwip = latest_fin.capital_wip if latest_fin else None
+
+        # Candle price series
+        if adj_prices:
+            daily_closes_series = [p["adj_close"] for p in adj_prices]
+            daily_highs_series = [p["adj_high"] for p in adj_prices]
+            daily_lows_series = [p["adj_low"] for p in adj_prices]
+            daily_volumes_series = [p.get("volume", 100000.0) for p in adj_prices]
+        elif prices:
+            prices_asc = list(reversed(prices))
+            daily_closes_series = [p.close_price for p in prices_asc]
+            daily_highs_series = [p.high_price for p in prices_asc]
+            daily_lows_series = [p.low_price for p in prices_asc]
+            daily_volumes_series = [100000.0 for _ in prices_asc]
+        else:
+            daily_closes_series = [cur_price]
+            daily_highs_series = [high_52w]
+            daily_lows_series = [low_52w]
+            daily_volumes_series = [100000.0]
+
+        multibagger_5pillar_eval = TrajectoryInflectionEngine.synthesize_5pillar_multibagger_matrix(
+            symbol=symbol,
+            sector=intel.get("sector", "General"),
+            current_revenue_cr=latest_fin.revenue if latest_fin else None,
+            gross_block_cr=curr_gross_block,
+            cwip_cr=curr_cwip,
+            asset_turnover=None,
+            ebitda_history=ebitda_hist,
+            margin_history=margin_hist,
+            current_receivables_cr=curr_receivables,
+            current_inventories_cr=curr_inventories,
+            current_payables_cr=curr_payables,
+            current_cfo_cr=curr_cfo,
+            current_ebitda_cr=curr_ebitda,
+            revenue_growth_yoy_pct=lt.get("revenue_growth_yoy"),
+            receivables_growth_yoy_pct=None,
+            dso_history=dso_hist if len(dso_hist) >= 2 else None,
+            economic_roic_pct=lt.get("roce_pct"),
+            reinvestment_rate_pct=50.0,
+            market_implied_growth_5y_pct=val_eval.get("reverse_dcf_implied_growth_pct"),
+            daily_closes=daily_closes_series,
+            benchmark_closes=None,
+            daily_highs=daily_highs_series,
+            daily_lows=daily_lows_series,
+            daily_volumes=daily_volumes_series,
+            current_price=cur_price
+        )
 
         master_record = {
             "symbol": symbol,
@@ -774,27 +965,29 @@ class WatchlistManager:
                 "3m": ret_3m,
                 "1y": ret_1y
             },
-            "m6_longterm_score": lt.get("m6_frozen_score", 75),
-            "m6_grade": lt.get("grade", "CONVICTION_BUY"),
-            "m6_evidence_tier": lt.get("evidence_tier", "Tier 1 Validated"),
-            "swing_score": sw.get("score", 70),
+            "m6_longterm_score": lt.get("m6_frozen_score") if lt.get("m6_frozen_score") is not None else lt.get("score"),
+            "m6_grade": lt.get("grade", "WATCHLIST"),
+            "m6_evidence_tier": lt.get("evidence_tier", "Tier 2 Observed"),
+            "swing_score": sw.get("score"),
             "swing_setup": sw.get("setup", "CONSOLIDATION"),
             "swing_target": sw.get("target_price"),
             "swing_stop_loss": sw.get("stop_loss"),
             "swing_risk_reward": sw.get("risk_reward"),
-            "intraday_score": intra.get("score", 65),
+            "intraday_score": intra.get("score"),
             "intraday_setup": intra.get("setup", "RANGE"),
-            "primary_verdict": intel.get("primary_verdict", "ACCUMULATE_ON_DIPS"),
-            "horizon_recommendation": intel.get("horizon_recommendation", "Long-Term Compounder"),
-            "sizing_guidance": intel.get("sizing_guidance", "Standard Allocation"),
+            "primary_verdict": intel.get("primary_verdict", "NEUTRAL_WATCHLIST"),
+            "horizon_recommendation": intel.get("horizon_recommendation", "Monitor for Catalyst / Setup"),
+            "sizing_guidance": intel.get("sizing_guidance", "Zero Capital Allocation"),
             "roce_pct": lt.get("roce_pct"),
             "fcf_yield_pct": lt.get("fcf_yield_pct"),
             "pe_ratio": lt.get("pe_ratio"),
+            "valuation": val_eval,
+            "multibagger_5pillar": multibagger_5pillar_eval,
             "liquidity": {
-                "avg_daily_volume_20": cap.get("avg_daily_volume_20", 100000),
-                "avg_daily_turnover_cr": cap.get("avg_daily_turnover_cr", 25.0),
-                "max_safe_position_size_cr": cap.get("max_safe_position_size_cr", 1.25),
-                "capacity_note": cap.get("capacity_note", "5% ADV Limit")
+                "avg_daily_volume_20": cap.get("avg_daily_volume_20", 0.0),
+                "avg_daily_turnover_cr": cap.get("avg_daily_turnover_cr", 0.0),
+                "max_safe_position_size_cr": cap.get("max_safe_position_size_cr", 0.0),
+                "capacity_note": cap.get("capacity_note", "ADV Liquidity Analysis")
             },
             "shareholding": {
                 "promoter_pct": promoter_p,

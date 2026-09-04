@@ -85,26 +85,28 @@ class FeatureEngine:
             else:
                 features["ttm_consolidation_scope_flag"] = "CONSISTENT"
             
-            ttm_rev = sum(q.revenue for q in recent_4_q if q.revenue is not None)
-            ttm_ebit = sum(q.ebit for q in recent_4_q if q.ebit is not None)
-            ttm_ebitda = sum(q.ebitda for q in recent_4_q if q.ebitda is not None)
-            ttm_pat = sum(q.pat for q in recent_4_q if q.pat is not None)
-            ttm_ocf = sum(q.operating_cash_flow for q in recent_4_q if q.operating_cash_flow is not None)
-            ttm_capex = sum(q.capex for q in recent_4_q if q.capex is not None)
+            valid_revs = [q.revenue for q in recent_4_q if q.revenue is not None]
+            valid_ebits = [q.ebit for q in recent_4_q if q.ebit is not None]
+            valid_ebitdas = [q.ebitda for q in recent_4_q if q.ebitda is not None]
+            valid_deprs = [getattr(q, 'depreciation', None) for q in recent_4_q if getattr(q, 'depreciation', None) is not None]
+            valid_pats = [q.pat for q in recent_4_q if q.pat is not None]
+            valid_ocfs = [q.operating_cash_flow for q in recent_4_q if q.operating_cash_flow is not None]
+            valid_capexs = [q.capex for q in recent_4_q if q.capex is not None]
 
-            # Annualize if fewer than 4 quarters are available
-            q_factor = 4.0 / len(recent_4_q) if len(recent_4_q) > 0 else 1.0
-            if len(recent_4_q) < 4:
-                ttm_rev *= q_factor
-                ttm_ebit *= q_factor
-                ttm_ebitda *= q_factor
-                ttm_pat *= q_factor
+            ttm_rev = (sum(valid_revs) * (4.0 / len(valid_revs))) if valid_revs else 0.0
+            ttm_ebit = (sum(valid_ebits) * (4.0 / len(valid_ebits))) if valid_ebits else 0.0
+            ttm_ebitda = (sum(valid_ebitdas) * (4.0 / len(valid_ebitdas))) if valid_ebitdas else 0.0
+            ttm_depr = (sum(valid_deprs) * (4.0 / len(valid_deprs))) if valid_deprs else 0.0
+            ttm_pat = (sum(valid_pats) * (4.0 / len(valid_pats))) if valid_pats else 0.0
+            ttm_ocf = (sum(valid_ocfs) * (4.0 / len(valid_ocfs))) if valid_ocfs else 0.0
+            ttm_capex = (sum(valid_capexs) * (4.0 / len(valid_capexs))) if valid_capexs else 0.0
 
             features["latest_revenue"] = q0.revenue
             features["latest_pat"] = q0.pat
             features["ttm_revenue"] = round(ttm_rev, 2) if ttm_rev > 0 else None
             features["ttm_pat"] = round(ttm_pat, 2)
             features["ttm_ebit"] = round(ttm_ebit, 2)
+            features["ttm_depreciation"] = round(ttm_depr, 2) if ttm_depr > 0 else None
 
             features["ebitda_margin"] = round((ttm_ebitda / ttm_rev * 100), 2) if (ttm_ebitda and ttm_rev > 0) else None
             features["pat_margin"] = round((ttm_pat / ttm_rev * 100), 2) if (ttm_pat and ttm_rev > 0) else None
@@ -266,7 +268,7 @@ class FeatureEngine:
         else:
             features.update({
                 "latest_revenue": None, "latest_pat": None, "ttm_revenue": None,
-                "ttm_pat": None, "ttm_ebit": None, "ebitda_margin": None,
+                "ttm_pat": None, "ttm_ebit": None, "ttm_depreciation": None, "ebitda_margin": None,
                 "pat_margin": None, "revenue_yoy_growth_pct": None, "pat_yoy_growth_pct": None,
                 "gross_de_ratio": None, "net_de_ratio": None, "financial_de_ratio": None,
                 "debt_to_equity": None, "debt_to_ebitda": None, "net_cash_position": None,
@@ -301,7 +303,7 @@ class FeatureEngine:
                 )
                 if annual_bs:
                     f0 = annual_bs[0]
-                    eq_cap = getattr(f0, "equity_share_capital", None) or getattr(f0, "equity_capital", None) or getattr(f0, "net_worth", None)
+                    eq_cap = getattr(f0, "equity_share_capital", None) or getattr(f0, "equity_capital", None)
                     if eq_cap and eq_cap > 0:
                         comp_row = db.query(Company).filter_by(company_id=company_id).first()
                         fv = getattr(comp_row, "face_value", 10.0) or 10.0

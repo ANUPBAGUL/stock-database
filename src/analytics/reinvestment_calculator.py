@@ -27,15 +27,25 @@ class ReinvestmentCalculator:
 
     @staticmethod
     def calculate_incremental_roce_trajectory(
-        db: Session, company_id: str
+        db: Session, company_id: str, period_type: str = "ANNUAL"
     ) -> List[Dict[str, Any]]:
         """
         Extracts annual / TTM bitemporal filings sorted chronologically and calculates
         the year-over-year incremental ROCE, incremental ROIC, and reinvestment rate.
+        Enforces period_type isolation so annual statements are not mixed with quarterly statements.
         """
-        filings = db.query(BitemporalFinancial).filter(
-            BitemporalFinancial.company_id == company_id
-        ).order_by(BitemporalFinancial.period_end_date.asc()).all()
+        query = db.query(BitemporalFinancial).filter(
+            BitemporalFinancial.company_id == company_id,
+            BitemporalFinancial.period_type == period_type
+        )
+        filings = query.order_by(BitemporalFinancial.period_end_date.asc()).all()
+
+        # Fallback to QUARTERLY if no annual filings are stored
+        if len(filings) < 2 and period_type == "ANNUAL":
+            filings = db.query(BitemporalFinancial).filter(
+                BitemporalFinancial.company_id == company_id,
+                BitemporalFinancial.period_type == "QUARTERLY"
+            ).order_by(BitemporalFinancial.period_end_date.asc()).all()
 
         if len(filings) < 2:
             return []

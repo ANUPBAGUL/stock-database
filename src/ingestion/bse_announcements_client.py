@@ -125,10 +125,18 @@ class BseAnnouncementsClient:
 
                                 pub_dt = None
                                 if dt_tm_str:
-                                    try:
-                                        pub_dt = datetime.fromisoformat(dt_tm_str.split(".")[0])
-                                    except Exception:
-                                        pub_dt = datetime.utcnow()
+                                    clean_dt_tm = dt_tm_str.split(".")[0].strip()
+                                    for fmt in ("%Y-%m-%dT%H:%M:%S", "%Y-%m-%d %H:%M:%S", "%d/%m/%Y %H:%M:%S", "%d-%m-%Y %H:%M:%S", "%d-%b-%Y %H:%M:%S"):
+                                        try:
+                                            pub_dt = datetime.strptime(clean_dt_tm, fmt)
+                                            break
+                                        except ValueError:
+                                            continue
+                                    if not pub_dt:
+                                        try:
+                                            pub_dt = datetime.fromisoformat(clean_dt_tm)
+                                        except Exception:
+                                            pub_dt = datetime.utcnow()
 
                                 doc_url = None
                                 if attachment_name and attachment_name.strip():

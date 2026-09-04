@@ -94,7 +94,10 @@ class InstitutionalRiskEngine:
 
         # 5. Liquidity / ADV Participation Limit Check (5% ADV)
         max_liquidity_capital = daily_turnover_inr * (InstitutionalRiskEngine.MAX_ADV_PARTICIPATION_PCT / 100.0)
-        if approved_investment_inr > max_liquidity_capital and max_liquidity_capital > 0:
+        if daily_turnover_inr <= 0:
+            violations.append("ILLIQUID_ASSET: Daily turnover is <= 0 INR. Trading halted.")
+            approved_investment_inr = 0.0
+        elif approved_investment_inr > max_liquidity_capital:
             warnings.append(
                 f"LIQUIDITY_CONSTRAINT: Sized down to Rs.{max_liquidity_capital:,.0f} "
                 f"(Max {InstitutionalRiskEngine.MAX_ADV_PARTICIPATION_PCT}% of 20-day ADV to prevent slippage)"
@@ -105,7 +108,7 @@ class InstitutionalRiskEngine:
         final_investment_inr = round(approved_shares * current_price, 2)
 
         if final_investment_inr <= 0:
-            status = "REJECTED_CAPACITY_ZERO"
+            status = "REJECTED_ILLIQUID" if daily_turnover_inr <= 0 else "REJECTED_CAPACITY_ZERO"
         elif warnings:
             status = "APPROVED_WITH_CAPACITY_REDUCTION"
         else:

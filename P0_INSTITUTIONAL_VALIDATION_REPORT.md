@@ -28,8 +28,10 @@ The P0 Truth, Temporal Isolation, Survivorship-Free Universe, Wealth Compounding
 | **Layer H** | OOS Security Firewall & Censoring Classification (`M7_OOS_2026_V1`) | 4 | 4 | 0 | 0 |
 | **Layer I** | Machine-Readable Provenance & 100-Run Determinism (Invariants F, H) | 3 | 3 | 0 | 0 |
 | **Layer J** | End-to-End Synthetic 15-Company Golden Cohort Pipeline | 1 | 1 | 0 | 0 |
+| **Layer K** | 3-Pillar Institutional Valuation Engine (PEG, FCF Yield, Reverse-DCF, 6 Regimes) | 10 | 10 | 0 | 0 |
+| **Layer L** | 5-Pillar Multibagger Discovery Suite (Inflection, Capacity TAM, WC Sentinel, Exp. Gap, RS) | 9 | 9 | 0 | 0 |
 | **Legacy & Pipeline** | Data truth audit, bitemporal replay, deep engines, watchlist | 58 | 58 | 0 | 0 |
-| **TOTAL** | **Comprehensive System Validation Suite** | **99** | **99** | **0** | **0** |
+| **TOTAL** | **Comprehensive System Validation Suite** | **118** | **118** | **0** | **0** |
 
 ---
 

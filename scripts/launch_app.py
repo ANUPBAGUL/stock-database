@@ -314,6 +314,8 @@ class WatchlistAppHandler(http.server.SimpleHTTPRequestHandler):
         try:
             count = db.query(Company).filter_by(status="ACTIVE").count()
             auth_status = UpstoxAuthenticator.get_auth_status()
+            from config.settings import settings
+            db_name = settings.DATABASE_URL.split("/")[-1] if "/" in settings.DATABASE_URL else settings.DATABASE_URL
             self.send_json_response({
                 "system": "Stock Watchlist & Information Maintenance Hub",
                 "port": PORT,
@@ -323,7 +325,7 @@ class WatchlistAppHandler(http.server.SimpleHTTPRequestHandler):
                 "upstox_auth": auth_status,
                 "total_active_watchlist_stocks": count,
                 "primary_data_provider": "UPSTOX_V2_API",
-                "database": "stock_analysis.db"
+                "database": db_name
             })
         finally:
             db.close()

@@ -138,6 +138,29 @@ The fundamental engine focuses on economic value creation rather than accounting
 
 ---
 
+### Layer 3B: 3-Pillar Institutional Valuation Framework ([ValuationEngine](file:///d:/Projects/Stock_Watchlist_Hub/src/analytics/valuation_engine.py))
+
+Rather than relying on misleading static multiples (e.g. labeling low P/E as cheap and high P/E as expensive), the platform implements the **Damodaran & Mauboussin 3-Pillar Triangulation Model**:
+
+1. **Growth-Adjusted PEG Ratio:**
+   $$\text{PEG} = \frac{\text{Trailing P/E}}{\text{Clamped EPS Growth Rate (\%) } \in [5\%, 60\%]}$$
+   * Enforces negative growth safeguards (flags negative growth instead of calculating deceptive negative PEG).
+2. **Free Cash Flow Yield vs. Sovereign Benchmark:**
+   $$\text{FCF Yield} = \frac{\text{TTM Free Cash Flow}}{\text{Market Capitalization}} \times 100\%$$
+   * Benchmarked against India 10-Year Government Bond yield ($7.10\%$) to measure equity risk premium.
+3. **Reverse-DCF Market Expectation Hurdle (Mauboussin Model):**
+   * Solves via numerical bisection for the exact 5-year CAGR ($g_{\text{implied}}$) the current stock price demands ($r = 12.0\%, g_T = 5.5\%$).
+
+#### The 6 Institutional Valuation Regimes:
+* 🟢 **`UNDERVALUED_COMPOUNDER`**: High ROCE ($\ge 18\%$) + $\text{PEG} \le 1.15$ trading below historical median multiple.
+* 🟢 **`DEEP_VALUE`**: $\text{P/E} \le 16\times$ with $\text{FCF Yield} \ge 6.5\%$ and clean debt ($\text{D/E} \le 0.6$).
+* 🔵 **`FAIR_VALUE`**: Priced in line with intrinsic earnings compounding ($\text{PEG } 1.15\text{--}1.8$).
+* 🟡 **`QUALITY_GROWTH_PREMIUM`**: Elite franchise ($\text{ROCE} \ge 22\%$) commanding justifiable growth premium.
+* 🔴 **`OVERVALUED_EXTREME`**: Multiple compression risk ($\text{PEG} > 3.0$ or Implied $g > 35\%$).
+* ⚠️ **`VALUE_TRAP_WARNING`**: Deceptive low P/E masking negative growth ($\text{Growth} < 0\%$) and weak ROCE ($< 12\%$).
+
+---
+
 ### Layer 5: The 9 Fundamental Multibagger Discovery Questions
 
 Every analyzed stock is subjected to a structured 9-question falsification framework:
@@ -300,6 +323,61 @@ The post-experiment harness (`scripts/train_m7_discovery_model.py`) provides the
 
 ---
 
+---
+
+## Layer 12: 5-Pillar Institutional Multibagger Discovery & Trajectory Inflection Architecture
+
+Replaces naive additive quality screening ($0.30Q + 0.25G + \dots$) with a mathematically rigorous 5-pillar discovery engine based on Michael Mauboussin's *Expectations Investing*, Bruce Greenwald's *Earnings Power Value*, Mark Minervini's *SEPA / VCP*, and Indian equity forensic accounting.
+
+### Core Philosophy
+$$\boxed{\text{Multibagger Alpha} = \Delta(\text{Future Fundamental Reality}) - \text{Market-Implied Expectations} > 0}$$
+Confirmed by institutional price structure/volume accumulation and guarded by strict working capital forensic circuit breakers.
+
+### The 5 Structural Pillars
+
+```mermaid
+graph TD
+    P1["Pillar 1: Nonlinear Inflection Engine (ROIC × Reinvestment × Op. Lev, Δ² EBITDA > 0)"]
+    P2["Pillar 2: Capacity-Constrained Granular TAM (Gross Block Ceiling, SOM ≤ 25%, Runway Yrs)"]
+    P3["Pillar 3: Working Capital Sentinel (Debtor Drift Δ² DSO > 0, CFO/EBITDA < 70% Traps)"]
+    P4["Pillar 4: The Expectations Gap (Intrinsic Compounding Rate - Reverse-DCF 5Y Implied CAGR)"]
+    P5["Pillar 5: Price Structure & Mansfield RS (Weinstein Stage 2, RS vs NIFTY 50, VCP Contraction)"]
+    
+    P1 --> HUB["Institutional Multibagger Hub"]
+    P2 --> HUB
+    P3 --> HUB
+    P4 --> HUB
+    P5 --> HUB
+    
+    HUB --> TIERS["Multibagger Classification Tiers: Tier 1 Asymmetric Inflection / Tier 2 Compounder / Circuit Breaker Disqualified"]
+```
+
+1. **Pillar 1: Nonlinear Inflection Engine ([`trajectory_inflection.py`](file:///d:/Projects/Stock_Watchlist_Hub/src/analytics/trajectory_inflection.py)):**
+   * Multiplicative compounding power: $\text{Compounding Rate} = (\text{ROIC} \times \text{Reinvestment Rate}) \times (1 + \text{Operating Leverage Multiplier})$.
+   * 2nd-derivative acceleration solver: detects $\Delta^2\text{EBITDA} > 0$ and gross margin inflection before consensus realizes.
+
+2. **Pillar 2: Capacity-Constrained Granular TAM Engine ([`granular_tam_engine.py`](file:///d:/Projects/Stock_Watchlist_Hub/src/analytics/granular_tam_engine.py)):**
+   * Physical Asset Capacity Ceiling: $\text{Max Revenue Capacity} = (\text{Gross Block} + \text{CWIP}) \times \text{Peak Asset Turnover}$.
+   * Plausible Obtainable Market: $\text{Effective SOM} = \min(\text{Niche TAM} \times 0.25, \text{Max Revenue Capacity})$.
+   * Organic growth runway years ($P_{10}$ Bear, $P_{50}$ Base, $P_{90}$ Bull).
+
+3. **Pillar 3: Working Capital & Forensic Anti-Trap Sentinel ([`working_capital_sentinel.py`](file:///d:/Projects/Stock_Watchlist_Hub/src/analytics/working_capital_sentinel.py)):**
+   * Days Sales Outstanding (DSO) 1st ($\Delta\text{DSO}$) and 2nd derivative acceleration ($\Delta^2\text{DSO}$).
+   * Revenue vs. Receivables YoY Growth divergence ($> +15\%$).
+   * Cash Flow from Operations (CFO) to EBITDA Conversion Ratio ($< 70\%$ warning, $< 50\%$ hard trap).
+   * **Hard Circuit Breaker:** Automatically rejects working capital traps regardless of reported earnings.
+
+4. **Pillar 4: The Expectations Gap Engine ([`expectations_gap_engine.py`](file:///d:/Projects/Stock_Watchlist_Hub/src/analytics/expectations_gap_engine.py)):**
+   * Computes $\text{Expectations Gap} = \text{Sustainable Compounding Rate} - \text{Reverse-DCF Market-Implied 5Y CAGR}$.
+   * Classifies 5 regimes: `HIGH_ASYMMETRY_UNDERVALUATION` ($\ge +8\%$), `MODERATE_POSITIVE_GAP`, `EFFICIENTLY_PRICED`, `ELEVATED_EXPECTATIONS`, `PRICED_FOR_PERFECTION_ASYMMETRIC_RISK` ($< -10\%$).
+
+5. **Pillar 5: Quantitative Price Structure, Mansfield RS & VCP ([`price_structure_engine.py`](file:///d:/Projects/Stock_Watchlist_Hub/src/analytics/price_structure_engine.py)):**
+   * Stan Weinstein / Minervini Stage 2 Trend validation ($\text{Price} > \text{SMA}_{50} > \text{SMA}_{150} > \text{SMA}_{200}$ with positive 200DMA slope).
+   * Mansfield Relative Strength vs NIFTY 50 benchmark outperformance tracking.
+   * Volatility Contraction Pattern (VCP) & volume dry-up ratio ($< 65\%$ of 50DMA volume).
+
+---
+
 ## Verification & Test Standard
 
 The entire pipeline is validated through automated test suites:
@@ -308,4 +386,8 @@ The entire pipeline is validated through automated test suites:
 * `tests/test_pit_truth_database.py`: Verifies decay half-life, PIT lookups, and failure diagnostics.
 * `tests/test_multibagger_deep_engines.py`: Verifies ROIC, Greenwald CapEx, 10x TAM solve, Acceleration, and Latent Upside.
 * `tests/test_200iq_research_pipeline.py`: Verifies Competitive Engine HHI, Pricing Power, Research Snapshots, and M7 Harness.
-* **Current Status:** `44/44 Tests Passing (100% Success)`.
+* `tests/test_valuation_engine.py`: Verifies 3-Pillar Valuation PEG, FCF yield spread, Reverse-DCF solver, and 6 regime states.
+* `tests/test_5pillar_multibagger_suite.py`: Verifies all 5 pillars, forensic debtor drift traps, and circuit breaker disqualifications.
+* `tests/institutional/`: 41 tests verifying Acceptance Invariants A through H.
+* **Master Test Suite Status:** `118 / 118 Tests Passing (100% Success)`.
+

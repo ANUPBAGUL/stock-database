@@ -155,6 +155,8 @@ class ScreenerClient:
             records = []
             for col_idx, qtr_label in enumerate(quarters):
                 period_end = self._parse_quarter_label(qtr_label)
+                if not period_end:
+                    continue
                 
                 promoter_pct = self._find_category_val(rows_data, ["promoter", "promoters"], col_idx)
                 fii_pct = self._find_category_val(rows_data, ["fii", "fiis", "foreign"], col_idx)
@@ -239,6 +241,8 @@ class ScreenerClient:
             records = []
             for col_idx, yr_label in enumerate(years):
                 period_end = self._parse_year_label(yr_label)
+                if not period_end:
+                    continue
 
                 equity_cap = self._find_category_val(rows_data, ["equity capital", "share capital"], col_idx) or 0.0
                 reserves = self._find_category_val(rows_data, ["reserves", "reserves & surplus"], col_idx) or 0.0
@@ -335,9 +339,11 @@ class ScreenerClient:
             records = []
             for col_idx, q_label in enumerate(quarters):
                 period_end = self._parse_quarter_label(q_label)
+                if not period_end:
+                    continue
 
                 sales = self._find_category_val(rows_data, ["sales", "revenue"], col_idx)
-                ebit = self._find_category_val(rows_data, ["operating profit", "ebitda"], col_idx)
+                op_profit = self._find_category_val(rows_data, ["operating profit", "ebitda"], col_idx)
                 opm = self._find_category_val(rows_data, ["opm %"], col_idx)
                 other_inc = self._find_category_val(rows_data, ["other income"], col_idx) or 0.0
                 interest = self._find_category_val(rows_data, ["interest", "finance costs"], col_idx) or 0.0
@@ -347,6 +353,11 @@ class ScreenerClient:
                 pat = self._find_category_val(rows_data, ["net profit", "pat"], col_idx)
                 eps = self._find_category_val(rows_data, ["eps in rs", "eps"], col_idx)
 
+                # Screener.in standard: 'Operating Profit' is EBITDA (Revenue - Operating Expenses).
+                # True EBIT (Operating Profit after D&A) = Operating Profit - Depreciation.
+                ebitda = op_profit
+                ebit = (op_profit - depr) if op_profit is not None else None
+
                 records.append({
                     "period_label": q_label,
                     "period_end_date": period_end,
@@ -354,7 +365,8 @@ class ScreenerClient:
                     "revenue_cr": sales,
                     "sales_cr": sales,
                     "ebit_cr": ebit,
-                    "operating_profit_cr": ebit,
+                    "ebitda_cr": ebitda,
+                    "operating_profit_cr": op_profit,
                     "opm_pct": opm,
                     "other_income_cr": other_inc,
                     "interest_cr": interest,
@@ -430,26 +442,36 @@ class ScreenerClient:
         return None
 
     @staticmethod
-    def _parse_quarter_label(label: str) -> date:
-        """Parses 'Jun 2026' or 'Mar 2025' into exact period end date."""
+    def _parse_quarter_label(label: str) -> Optional[date]:
+        """Parses 'Jun 2026' or 'Mar 2025' into exact period end date. Returns None if unparseable."""
         try:
             parts = label.strip().split()
-            month_str, year_str = parts[0][:3].title(), parts[1]
-            year = int(year_str)
-            month_days = {
-                "Mar": (3, 31),
-                "Jun": (6, 30),
-                "Sep": (9, 30),
-                "Dec": (12, 31),
-            }
-            if month_str in month_days:
-                m, d = month_days[month_str]
-                return date(year, m, d)
+            if len(parts) >= 2:
+                month_str, year_str = parts[0][:3].title(), parts[1].replace("*", "").strip()
+                year = int(year_str)
+                is_leap = (year % 4 == 0 and (year % 100 != 0 or year % 400 == 0))
+                month_days = {
+                    "Jan": (1, 31),
+                    "Feb": (2, 29 if is_leap else 28),
+                    "Mar": (3, 31),
+                    "Apr": (4, 30),
+                    "May": (5, 31),
+                    "Jun": (6, 30),
+                    "Jul": (7, 31),
+                    "Aug": (8, 31),
+                    "Sep": (9, 30),
+                    "Oct": (10, 31),
+                    "Nov": (11, 30),
+                    "Dec": (12, 31),
+                }
+                if month_str in month_days:
+                    m, d = month_days[month_str]
+                    return date(year, m, d)
         except Exception:
             pass
-        return date.today()
+        return None
 
     @staticmethod
-    def _parse_year_label(label: str) -> date:
+    def _parse_year_label(label: str) -> Optional[date]:
         """Parses 'Mar 2026' into date(2026, 3, 31)."""
         return ScreenerClient._parse_quarter_label(label)

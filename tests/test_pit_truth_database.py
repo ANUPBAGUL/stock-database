@@ -427,7 +427,8 @@ class TestPITTruthDatabase(unittest.TestCase):
         # Verify Q2 state (base 150 -> 250 is +66.67% max run)
         state_q2 = next(s for s in q_states if s.quarter_end_date == date(2024, 9, 30))
         self.assertEqual(state_q2.market_cap_cr, 1500.0) # 150 price * 10 shares
-        self.assertEqual(state_q2.roce_pct, round((75.0 / (950.0 - 220.0)) * 100.0, 2))
+        # TTM EBIT is annualized across available quarters: (50 + 75) * (4/2) = 250.0 Cr
+        self.assertEqual(state_q2.roce_pct, round((250.0 / (950.0 - 220.0)) * 100.0, 2))
         self.assertEqual(state_q2.fwd_max_run_pct, 66.67)
 
     # ──────────────────────────────────────────────────────────────

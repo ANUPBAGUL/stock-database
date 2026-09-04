@@ -84,6 +84,8 @@ class OutcomeLabeler:
         
         min_before_2x = t0_price
         min_before_5x = t0_price
+        running_peak = t0_price
+        peak_to_trough_dd = 0.0
         
         daily_path = []
 
@@ -95,6 +97,13 @@ class OutcomeLabeler:
                 max_price = adj_p
             if adj_p < min_price:
                 min_price = adj_p
+
+            if adj_p > running_peak:
+                running_peak = adj_p
+            
+            curr_dd = ((adj_p - running_peak) / running_peak) * 100.0
+            if curr_dd < peak_to_trough_dd:
+                peak_to_trough_dd = curr_dd
 
             ratio = adj_p / t0_price
             
@@ -132,7 +141,7 @@ class OutcomeLabeler:
                 })
 
         max_return_pct = round(((max_price - t0_price) / t0_price) * 100.0, 2)
-        overall_drawdown_pct = round(((min_price - t0_price) / t0_price) * 100.0, 2)
+        overall_drawdown_pct = round(peak_to_trough_dd, 2)
         dd_before_2x_pct = round(((min_before_2x - t0_price) / t0_price) * 100.0, 2)
         dd_before_5x_pct = round(((min_before_5x - t0_price) / t0_price) * 100.0, 2)
 

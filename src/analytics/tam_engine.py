@@ -19,7 +19,12 @@ INDUSTRY_TAM_REGISTRY = {
     "RENEWABLE_SOLAR_COMPONENTS": {"niche_tam_cr": 80000.0, "macro_tam_cr": 400000.0, "name": "Solar Modules & Inverters"},
     "CONSUMER_QUICK_SERVICE_RESTAURANTS": {"niche_tam_cr": 35000.0, "macro_tam_cr": 250000.0, "name": "Organized QSR Chains"},
     "AUTO_ANCILLARY_EV_POWERTRAIN": {"niche_tam_cr": 40000.0, "macro_tam_cr": 300000.0, "name": "EV Powertrain & Thermal Systems"},
-    "GENERAL_MANUFACTURING": {"niche_tam_cr": 50000.0, "macro_tam_cr": 500000.0, "name": "General Midcap Manufacturing"},
+    "BANKING_FINANCIAL_SERVICES": {"niche_tam_cr": 1500000.0, "macro_tam_cr": 15000000.0, "name": "Indian Credit, Banking & Wealth Services"},
+    "FMCG_CONSUMER_GOODS": {"niche_tam_cr": 350000.0, "macro_tam_cr": 3000000.0, "name": "Consumer Staples & Discretionary Retail"},
+    "CAPITAL_GOODS_INFRASTRUCTURE": {"niche_tam_cr": 400000.0, "macro_tam_cr": 4500000.0, "name": "Heavy Engineering & Infrastructure Capex"},
+    "METALS_MINING_COMMODITIES": {"niche_tam_cr": 300000.0, "macro_tam_cr": 3500000.0, "name": "Metals, Mining & Materials"},
+    "SPECIALTY_CHEMICALS": {"niche_tam_cr": 120000.0, "macro_tam_cr": 1200000.0, "name": "Specialty Chemicals & Polymers"},
+    "GENERAL_MANUFACTURING": {"niche_tam_cr": 100000.0, "macro_tam_cr": 1000000.0, "name": "General Midcap Manufacturing"},
 }
 
 class ReverseTAMHurdleEngine:
@@ -38,21 +43,47 @@ class ReverseTAMHurdleEngine:
             return INDUSTRY_TAM_REGISTRY["SPECIALTY_FATS_CBE"]
         elif sym in ("DIXON", "DIXON.NS", "AMBER", "KAYNES", "SYRMA"):
             return INDUSTRY_TAM_REGISTRY["ELECTRONICS_MANUFACTURING_EMS"]
-        elif sym in ("TCS", "INFY", "WIPRO", "HCLTECH", "TECHM"):
+        elif sym in ("TCS", "INFY", "WIPRO", "HCLTECH", "TECHM", "PERSISTENT", "COFORGE", "LTTS"):
             return INDUSTRY_TAM_REGISTRY["IT_SERVICES_GLOBAL"]
-        elif sym in ("DIVISLAB", "SUVENPHAR", "SYNGENE", "LAURUSLABS"):
+        elif sym in ("DIVISLAB", "SUVENPHAR", "SYNGENE", "LAURUSLABS", "CIPLA", "SUNPHARMA", "DRREDDY"):
             return INDUSTRY_TAM_REGISTRY["PHARMACEUTICALS_CRAMS_CDMO"]
-        elif sym in ("SOLARINDS", "DATAPATTNS", "MTARTECH", "PARAS"):
+        elif sym in ("SOLARINDS", "DATAPATTNS", "MTARTECH", "PARAS", "HAL", "BEL", "MAZDOCK", "COCHINSHIP"):
             return INDUSTRY_TAM_REGISTRY["DEFENSE_AEROSPACE_INDIGENOUS"]
+        elif sym in ("HDFCBANK", "ICICIBANK", "SBIN", "KOTAKBANK", "AXISBANK", "BAJFINANCE", "BAJAJFINSV", "JIOFIN"):
+            return INDUSTRY_TAM_REGISTRY["BANKING_FINANCIAL_SERVICES"]
+        elif sym in ("HINDUNILVR", "ITC", "NESTLEIND", "BRITANNIA", "TATACONSUM", "VBL", "DABUR", "MARICO"):
+            return INDUSTRY_TAM_REGISTRY["FMCG_CONSUMER_GOODS"]
+        elif sym in ("LT", "BHEL", "SIEMENS", "ABB", "THERMAX", "CUMMINSIND"):
+            return INDUSTRY_TAM_REGISTRY["CAPITAL_GOODS_INFRASTRUCTURE"]
+        elif sym in ("TATASTEEL", "JSWSTEEL", "HINDALCO", "VEDL", "COALINDIA"):
+            return INDUSTRY_TAM_REGISTRY["METALS_MINING_COMMODITIES"]
+        elif sym in ("SRF", "NAVINFLUOR", "DEEPAKNTR", "AARTIIND", "PIIND", "ATUL"):
+            return INDUSTRY_TAM_REGISTRY["SPECIALTY_CHEMICALS"]
+        elif sym in ("TATAMOTORS", "M&M", "MARUTI", "BAJAJ-AUTO", "HEROMOTOCO", "EICHERMOT", "SONACOMS"):
+            return INDUSTRY_TAM_REGISTRY["AUTO_ANCILLARY_EV_POWERTRAIN"]
         
-        # Sector fallback
+        # Sector keyword fallback
         sec_upper = (sector or "").upper()
-        if "TECH" in sec_upper or "IT" in sec_upper:
+        if any(w in sec_upper for w in ["BANK", "FINANC", "NBFC", "LENDING", "INSURANCE"]):
+            return INDUSTRY_TAM_REGISTRY["BANKING_FINANCIAL_SERVICES"]
+        elif any(w in sec_upper for w in ["TECH", "IT", "SOFTWARE", "DIGITAL"]):
             return INDUSTRY_TAM_REGISTRY["IT_SERVICES_GLOBAL"]
-        elif "PHARMA" in sec_upper:
+        elif any(w in sec_upper for w in ["PHARMA", "HEALTH", "DRUG", "BIOTECH"]):
             return INDUSTRY_TAM_REGISTRY["PHARMACEUTICALS_CRAMS_CDMO"]
-        elif "ELECTRONIC" in sec_upper:
+        elif any(w in sec_upper for w in ["ELECTRONIC", "EMS", "SEMICONDUCTOR"]):
             return INDUSTRY_TAM_REGISTRY["ELECTRONICS_MANUFACTURING_EMS"]
+        elif any(w in sec_upper for w in ["DEFENSE", "AEROSPACE"]):
+            return INDUSTRY_TAM_REGISTRY["DEFENSE_AEROSPACE_INDIGENOUS"]
+        elif any(w in sec_upper for w in ["FMCG", "CONSUMER", "FOOD", "BEVERAGE", "RETAIL"]):
+            return INDUSTRY_TAM_REGISTRY["FMCG_CONSUMER_GOODS"]
+        elif any(w in sec_upper for w in ["INFRA", "ENGINEERING", "CAPITAL GOODS", "CONSTRUCTION", "POWER"]):
+            return INDUSTRY_TAM_REGISTRY["CAPITAL_GOODS_INFRASTRUCTURE"]
+        elif any(w in sec_upper for w in ["METAL", "STEEL", "MINING", "MINERAL"]):
+            return INDUSTRY_TAM_REGISTRY["METALS_MINING_COMMODITIES"]
+        elif any(w in sec_upper for w in ["CHEMIC", "POLYMER", "FERTILIZ"]):
+            return INDUSTRY_TAM_REGISTRY["SPECIALTY_CHEMICALS"]
+        elif any(w in sec_upper for w in ["AUTO", "VEHICLE", "MOTOR"]):
+            return INDUSTRY_TAM_REGISTRY["AUTO_ANCILLARY_EV_POWERTRAIN"]
         
         return INDUSTRY_TAM_REGISTRY["GENERAL_MANUFACTURING"]
 

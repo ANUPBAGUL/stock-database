@@ -68,8 +68,10 @@ class OutcomeRecord(Base):
     prediction = relationship("PredictionRecord", back_populates="outcome")
 
 
-# Create tables if not exist
-Base.metadata.create_all(bind=engine)
+def init_truth_db(target_engine=None):
+    """Initializes truth database tables on the specified engine or default engine."""
+    eng = target_engine or engine
+    Base.metadata.create_all(bind=eng)
 
 
 class TruthDatabaseManager:

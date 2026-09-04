@@ -134,13 +134,42 @@ class ShareholdingClient:
 
     @staticmethod
     def _parse_nse_period(period_str: str) -> Optional[date]:
-        """Parses 'Jun 2026' or '30-Jun-2026' to date(2026, 6, 30)."""
-        if not period_str:
+        """
+        Robustly parses period strings from various formats:
+        - 'Jun 2026', 'September 2024'
+        - '30-Jun-2026', '30-06-2026', '2026-06-30'
+        - '30/06/2026', '30-Sep-2024'
+        """
+        if not period_str or period_str.strip() in ("-", "", "None"):
             return None
-        parts = period_str.strip().split()
+        
+        clean_str = period_str.strip()
+        
+        # Try standard datetime formats first
+        for fmt in ("%d-%b-%Y", "%d-%m-%Y", "%Y-%m-%d", "%d/%m/%Y", "%d %b %Y", "%b %Y", "%B %Y"):
+            try:
+                dt = datetime.strptime(clean_str, fmt).date()
+                if fmt in ("%b %Y", "%B %Y"):
+                    # End of month mapping
+                    month_days = {
+                        1: 31, 2: 29 if dt.year % 4 == 0 and (dt.year % 100 != 0 or dt.year % 400 == 0) else 28,
+                        3: 31, 4: 30, 5: 31, 6: 30, 7: 31, 8: 31, 9: 30, 10: 31, 11: 30, 12: 31
+                    }
+                    return date(dt.year, dt.month, month_days.get(dt.month, 30))
+                return dt
+            except ValueError:
+                continue
+
+        # Space separated fallback
+        parts = clean_str.split()
         if len(parts) == 2:
-            m_str, y_str = parts[0][:3].title(), parts[1]
-            m_map = {"Mar": (3, 31), "Jun": (6, 30), "Sep": (9, 30), "Dec": (12, 31)}
+            m_str, y_str = parts[0][:3].title(), parts[1].replace("*", "").strip()
+            m_map = {
+                "Jan": (1, 31), "Feb": (2, 28), "Mar": (3, 31),
+                "Apr": (4, 30), "May": (5, 31), "Jun": (6, 30),
+                "Jul": (7, 31), "Aug": (8, 31), "Sep": (9, 30),
+                "Oct": (10, 31), "Nov": (11, 30), "Dec": (12, 31)
+            }
             if m_str in m_map:
                 try:
                     return date(int(y_str), m_map[m_str][0], m_map[m_str][1])

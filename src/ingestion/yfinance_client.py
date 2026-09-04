@@ -271,6 +271,7 @@ class YFinanceClient:
                 metrics = {
                     "revenue":              self._to_crores(revenue),
                     "ebitda":               self._to_crores(ebitda),
+                    "depreciation":         self._to_crores(depreciation),
                     "ebit":                 self._to_crores(ebit),
                     "pat":                  self._to_crores(net_income),
                     "eps":                  None,

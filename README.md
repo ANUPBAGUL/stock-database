@@ -55,8 +55,9 @@ $$\boxed{\text{Outcome} \not\rightarrow \text{Feature}}$$
 │  • EconomicROICEngine (NOPAT, Invested Capital)      │  │  • WealthCompoundingEngine (W_{t+1})         │
 │  • ReinvestmentCalculator (Greenwald CapEx)          │  │  • OutcomeLabeler (2x, 5x, 10x milestones)   │
 │  • ReverseTAMHurdleEngine (10x Hurdle, SAM, SOM)     │  │  • TerminalRecoveryEngine (CIRP/Liquidation) │
-│  • EarningsAccelerationEngine (Persistence)          │  │  • CompetingRiskClassifier (Censoring)       │
-│  • CompetitivePositionEngine (HHI Bounds, Moat)      │  └──────────────────────┬───────────────────────┘
+│  • ValuationEngine (3-Pillar PEG, FCF, Reverse DCF)  │  │  • CompetingRiskClassifier (Censoring)       │
+│  • EarningsAccelerationEngine (Persistence)          │  └──────────────────────┬───────────────────────┘
+│  • CompetitivePositionEngine (HHI Bounds, Moat)      │                         │
 │  • LifecycleClassifier (6D Continuous Coordinates)   │                         │
 │  • LatentUpsideEngine (Operational Leverage)         │                         │
 └──────────────────────────┬───────────────────────────┘                         │
@@ -126,16 +127,24 @@ where $R = \max(0, 100 - \sum s_i)$.
 
 ---
 
-## 4. Test Suite & Validation Matrix (99/99 Tests Passed)
+## 4. Test Suite & Validation Matrix (118/118 Tests Passed)
 
 ```bash
-# Run the complete test suite
-python -m pytest -q
-# Result: 99 passed in 26.81s
+# Run the complete master test suite
+python -m pytest -v
+# Result: 118 passed in 50.07s (100% Pass Rate)
 
 # Run the dedicated institutional acceptance suite
 python -m pytest tests/institutional/ -v
 # Result: 41 passed in 3.43s
+
+# Run the 5-Pillar Multibagger Discovery suite
+python -m pytest tests/test_5pillar_multibagger_suite.py -v
+# Result: 9 passed in 0.39s
+
+# Run the quantitative valuation engine suite
+python -m pytest tests/test_valuation_engine.py -v
+# Result: 10 passed in 0.32s
 ```
 
 ### Layer Breakdown:
@@ -148,6 +157,8 @@ python -m pytest tests/institutional/ -v
 * **Layer H:** OOS Security Firewall & Censoring Classification (`M7_OOS_2026_V1`)
 * **Layer I:** Machine-Readable Provenance & 100-Run Determinism (Invariants F, H)
 * **Layer J:** End-to-End Synthetic 15-Company Golden Cohort Pipeline
+* **Layer K:** 3-Pillar Institutional Valuation Engine (PEG, FCF Yield, Reverse-DCF, 6 Regimes)
+* **Layer L:** 5-Pillar Multibagger Discovery & Trajectory Inflection Architecture (Nonlinear Inflection, Capacity TAM, Debtor Days Forensic Sentinel, Mauboussin Expectations Gap, Minervini Stage 2 / Mansfield RS)
 
 ---
 
@@ -169,3 +180,5 @@ python -m pytest tests/institutional/ -v
 * **Test Architecture & Dependency Map:** [`TEST_ARCHITECTURE.md`](file:///d:/Projects/Stock_Watchlist_Hub/TEST_ARCHITECTURE.md)
 * **Machine-Readable Audit JSON:** [`institutional_validation_report.json`](file:///d:/Projects/Stock_Watchlist_Hub/institutional_validation_report.json)
 * **Investment Thesis:** [`STOCK_ANALYSIS_THESIS.md`](file:///d:/Projects/Stock_Watchlist_Hub/STOCK_ANALYSIS_THESIS.md)
+* **5-Pillar Multibagger Walkthrough:** [`walkthrough.md`](file:///C:/Users/bagul/.gemini/antigravity-ide/brain/77ee90f0-ce33-4279-a24e-7c4a77e4ee87/walkthrough.md)
+

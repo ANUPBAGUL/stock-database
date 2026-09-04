@@ -45,15 +45,16 @@ class PriceAdjuster:
         if not raw_prices:
             return []
 
-        # Point-In-Time Cutoff: Only consider corporate actions with ex_date <= cutoff_date
-        cutoff_date = as_of_date or end_date
+        # Point-In-Time Cutoff: Only consider corporate actions with ex_date <= cutoff_date when as_of_date is set.
+        # If as_of_date is None, adjust across all corporate actions up to the present basis.
+        cutoff_date = as_of_date
 
         # Fetch relevant corporate actions (SPLIT and BONUS only — these affect price continuity)
         query_actions = db.query(CorporateAction).filter(
             CorporateAction.company_id == company_id,
             CorporateAction.action_type.in_(["SPLIT", "BONUS"]),
         )
-        if cutoff_date:
+        if cutoff_date is not None:
             query_actions = query_actions.filter(CorporateAction.ex_date <= cutoff_date)
 
         actions = query_actions.order_by(CorporateAction.ex_date.asc()).all()
@@ -68,25 +69,29 @@ class PriceAdjuster:
         adjusted_series = []
         for price in raw_prices:
             # Compute cumulative adjustment factor:
-            # Multiply all price_factors where price.trading_date < action.ex_date <= cutoff_date
+            # Multiply all price_factors where price.trading_date < action.ex_date (and <= cutoff_date if set)
             cum_price_factor = 1.0
             for act in action_list:
-                if act["ex_date"] > price.trading_date and act["ex_date"] <= cutoff_date:
+                if act["ex_date"] > price.trading_date and (cutoff_date is None or act["ex_date"] <= cutoff_date):
                     cum_price_factor *= act["price_factor"]
 
-            # Volume adjustment: inversely scale volume so pre-split and post-split
-            # volumes are comparable. If price_factor < 1 (split), volume should increase.
-            adj_volume = int(price.volume / cum_price_factor) if cum_price_factor > 0 else price.volume
+            raw_vol = price.volume if price.volume is not None else 0
+            adj_volume = int(raw_vol / cum_price_factor) if (cum_price_factor > 0 and raw_vol is not None) else raw_vol
+
+            raw_close = price.close_price if price.close_price is not None else 0.0
+            raw_open = price.open_price if price.open_price is not None else raw_close
+            raw_high = price.high_price if price.high_price is not None else max(raw_open, raw_close)
+            raw_low = price.low_price if price.low_price is not None else min(raw_open, raw_close)
 
             adjusted_series.append({
                 "trading_date": price.trading_date,
-                "raw_close": price.close_price,
-                "adj_open": round(price.open_price * cum_price_factor, 4),
-                "adj_high": round(price.high_price * cum_price_factor, 4),
-                "adj_low": round(price.low_price * cum_price_factor, 4),
-                "adj_close": round(price.close_price * cum_price_factor, 4),
+                "raw_close": raw_close,
+                "adj_open": round(raw_open * cum_price_factor, 4),
+                "adj_high": round(raw_high * cum_price_factor, 4),
+                "adj_low": round(raw_low * cum_price_factor, 4),
+                "adj_close": round(raw_close * cum_price_factor, 4),
                 "volume": adj_volume,
-                "raw_volume": price.volume,
+                "raw_volume": raw_vol,
                 "cum_factor": cum_price_factor
             })
 

@@ -9,7 +9,7 @@ Implements the Dual-Track exponential decay framework:
 import math
 import re
 import logging
-from datetime import datetime, date, timedelta
+from datetime import datetime, date, timedelta, timezone
 from typing import Dict, Any, List, Optional, Tuple
 from sqlalchemy.orm import Session
 
@@ -178,8 +178,16 @@ class AnnouncementDecayEngine:
         S(t) = S_raw * e^(-lambda * delta_hours)
         Returns: (decayed_score, new_status)
         """
-        now = current_time or datetime.utcnow()
-        delta_hours = max(0.0, (now - publication_time).total_seconds() / 3600.0)
+        now = current_time or datetime.now(timezone.utc)
+        pub_dt = publication_time
+        if hasattr(now, "tzinfo") and now.tzinfo is not None:
+            if hasattr(pub_dt, "tzinfo") and pub_dt.tzinfo is None:
+                pub_dt = pub_dt.replace(tzinfo=timezone.utc)
+        else:
+            if hasattr(pub_dt, "tzinfo") and pub_dt.tzinfo is not None:
+                pub_dt = pub_dt.replace(tzinfo=None)
+
+        delta_hours = max(0.0, (now - pub_dt).total_seconds() / 3600.0)
 
         half_life_hours = HALF_LIFE_STRUCTURAL_HOURS if track_type == "STRUCTURAL" else HALF_LIFE_TACTICAL_HOURS
         decay_constant = math.log(2) / half_life_hours
@@ -217,10 +225,11 @@ class AnnouncementDecayEngine:
 
         updated_count = 0
         for item in active_items:
+            pub_time = item.source_published_at or item.publication_timestamp or item.ingested_at or now
             decayed, new_status = cls.calculate_decayed_score(
-                raw_score=item.raw_materiality_score,
-                track_type=item.track_type,
-                publication_time=item.publication_timestamp,
+                raw_score=item.raw_materiality_score or 0.0,
+                track_type=item.track_type or "TACTICAL",
+                publication_time=pub_time,
                 current_time=now
             )
             item.decayed_score = decayed
