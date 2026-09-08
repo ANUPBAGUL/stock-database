@@ -26,6 +26,7 @@ logger = logging.getLogger(__name__)
 # Instruments cache location
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 INSTRUMENTS_CACHE_FILE = os.path.join(BASE_DIR, "data", "upstox_nse_instruments.json")
+BSE_INSTRUMENTS_CACHE_FILE = os.path.join(BASE_DIR, "data", "upstox_bse_instruments.json")
 
 
 class UpstoxMarketDataIngestion:
@@ -36,6 +37,8 @@ class UpstoxMarketDataIngestion:
     UPSTOX_BASE_URL = "https://api.upstox.com/v2"
     _INSTRUMENTS_MAP: Dict[str, Dict[str, Any]] = {}
     _INSTRUMENTS_LOADED: bool = False
+    _BSE_INSTRUMENTS_MAP: Dict[str, Dict[str, Any]] = {}
+    _BSE_INSTRUMENTS_LOADED: bool = False
 
     def __init__(self, api_key: str = "", api_secret: str = "", access_token: str = ""):
         # Load .env
@@ -46,6 +49,7 @@ class UpstoxMarketDataIngestion:
         self.api_key = api_key or os.getenv("UPSTOX_API_KEY", "")
         self.api_secret = api_secret or os.getenv("UPSTOX_API_SECRET", "")
         self.access_token = access_token or os.getenv("UPSTOX_ACCESS_TOKEN", "")
+        self._token_invalid = False
         self.headers = {
             "Accept": "application/json",
             "Authorization": f"Bearer {self.access_token}" if self.access_token else "",
@@ -53,6 +57,8 @@ class UpstoxMarketDataIngestion:
 
     def is_authenticated(self) -> bool:
         """Check if a valid non-empty access token is configured."""
+        if getattr(self, "_token_invalid", False):
+            return False
         return bool(self.access_token and self.access_token != "your_upstox_access_token_here")
 
     # ──────────────────────────────────────────────────────────────
@@ -75,10 +81,22 @@ class UpstoxMarketDataIngestion:
                 with open(INSTRUMENTS_CACHE_FILE, "r", encoding="utf-8") as f:
                     cls._INSTRUMENTS_MAP = json.load(f)
                     cls._INSTRUMENTS_LOADED = True
-                    logger.info(f"Loaded {len(cls._INSTRUMENTS_MAP)} Upstox instruments from cache.")
-                    return cls._INSTRUMENTS_MAP
+                    logger.info(f"Loaded {len(cls._INSTRUMENTS_MAP)} Upstox NSE instruments from cache.")
             except Exception as e:
                 logger.warning(f"Error loading cached instruments: {e}. Downloading fresh master...")
+
+        # Load BSE instruments cache if present
+        if os.path.exists(BSE_INSTRUMENTS_CACHE_FILE) and (not cls._BSE_INSTRUMENTS_LOADED or force_reload):
+            try:
+                with open(BSE_INSTRUMENTS_CACHE_FILE, "r", encoding="utf-8") as f:
+                    cls._BSE_INSTRUMENTS_MAP = json.load(f)
+                    cls._BSE_INSTRUMENTS_LOADED = True
+                    logger.info(f"Loaded {len(cls._BSE_INSTRUMENTS_MAP)} Upstox BSE instruments from cache.")
+            except Exception as e:
+                logger.warning(f"Error loading cached BSE instruments: {e}")
+
+        if cls._INSTRUMENTS_LOADED and not force_reload:
+            return cls._INSTRUMENTS_MAP
 
         # Download from Upstox assets CDN
         url = "https://assets.upstox.com/market-quote/instruments/exchange/NSE.json.gz"
@@ -120,7 +138,7 @@ class UpstoxMarketDataIngestion:
     @classmethod
     def get_instrument_info(cls, symbol: str) -> Optional[Dict[str, Any]]:
         """
-        Looks up an NSE symbol in the Upstox instruments catalog.
+        Looks up a symbol in the Upstox instruments catalog across NSE and BSE.
         """
         if not cls._INSTRUMENTS_LOADED:
             cls.load_instruments_master()
@@ -138,15 +156,31 @@ class UpstoxMarketDataIngestion:
         if sym_clean in ALIAS_MAP:
             sym_clean = ALIAS_MAP[sym_clean]
 
+        # 1. Check NSE instruments
         if sym_clean in cls._INSTRUMENTS_MAP:
             return cls._INSTRUMENTS_MAP[sym_clean]
 
-        # Handle fallback patterns
         for k, v in cls._INSTRUMENTS_MAP.items():
             if k.replace("-", "").replace("&", "") == sym_clean.replace("-", "").replace("&", ""):
                 return v
 
+        # 2. Check BSE instruments
+        if sym_clean in cls._BSE_INSTRUMENTS_MAP:
+            return cls._BSE_INSTRUMENTS_MAP[sym_clean]
+
+        for k, v in cls._BSE_INSTRUMENTS_MAP.items():
+            if k.replace("-", "").replace("&", "") == sym_clean.replace("-", "").replace("&", ""):
+                return v
+
         return None
+
+    @classmethod
+    def get_instrument_key(cls, symbol: str) -> str:
+        """Resolves instrument key for Upstox API v2 across NSE and BSE"""
+        info = cls.get_instrument_info(symbol)
+        if info and info.get("instrument_key"):
+            return info["instrument_key"]
+        return f"NSE_EQ|{symbol.upper()}"
 
     # ──────────────────────────────────────────────────────────────
     # Historical Daily & Intraday Candles via Upstox
@@ -197,7 +231,7 @@ class UpstoxMarketDataIngestion:
                         "deliverable_volume": None,
                         "delivery_pct":       None,
                         # Price provenance fields (Fix 7)
-                        "exchange":           "NSE",
+                        "exchange":           info.get("exchange", "NSE") if info else ("BSE" if (inst_key and "BSE" in inst_key) else "NSE"),
                         "quote_type":         "CLOSE",
                         "price_source":       "UPSTOX_API",
                         "is_split_adjusted":  False,
@@ -205,6 +239,12 @@ class UpstoxMarketDataIngestion:
                     # Sort chronologically ascending
                     records.sort(key=lambda x: x["trading_date"])
                     return records
+
+            if resp.status_code == 401:
+                if not self._token_invalid:
+                    logger.warning("Upstox API returned 401 Unauthorized: token expired. Falling back to alternative data sources.")
+                    self._token_invalid = True
+                return []
 
             logger.warning(f"Upstox candle status {resp.status_code} for {symbol} ({inst_key}): {resp.text[:150]}")
             return []
@@ -261,10 +301,59 @@ class UpstoxMarketDataIngestion:
                         "exchange":             "NSE",
                         "quote_type":           "LTP",
                     }
+
+            if resp.status_code == 401:
+                if not self._token_invalid:
+                    logger.warning("Upstox API returned 401 Unauthorized: token expired. Falling back to alternative data sources.")
+                    self._token_invalid = True
+                return None
             return None
         except Exception as e:
             logger.error(f"Error fetching live quote for {symbol}: {e}")
             return None
+
+    def fetch_live_quotes_batched(self, symbols: List[str]) -> Dict[str, Dict[str, Any]]:
+        """
+        Fetches live market quotes for multiple symbols in a single batched HTTP request.
+        """
+        if not self.is_authenticated() or not symbols:
+            return {}
+
+        inst_keys = []
+        sym_key_map = {}
+        for s in symbols:
+            key = self.get_instrument_key(s)
+            if key:
+                inst_keys.append(key)
+                sym_key_map[key] = s.upper()
+
+        if not inst_keys:
+            return {}
+
+        encoded_keys = ",".join([urllib.parse.quote(k) for k in inst_keys])
+        url = f"{self.UPSTOX_BASE_URL}/market-quote/quotes?instrument_key={encoded_keys}"
+        try:
+            resp = requests.get(url, headers=self.headers, timeout=5)
+            if resp.status_code == 200:
+                data = resp.json().get("data", {})
+                result = {}
+                for k, q in data.items():
+                    matched_sym = None
+                    for inst_k, sym in sym_key_map.items():
+                        if inst_k in k or sym in k or k in inst_k:
+                            matched_sym = sym
+                            break
+                    if not matched_sym:
+                        matched_sym = k.split(":")[-1].replace("|", "").upper()
+                    result[matched_sym] = q
+                return result
+            elif resp.status_code == 401:
+                self._token_invalid = True
+                return {}
+            return {}
+        except Exception as e:
+            logger.warning(f"Upstox batched quotes failed: {e}")
+            return {}
 
     # ──────────────────────────────────────────────────────────────
     # Complete Symbol Ingestion into Database
@@ -294,10 +383,11 @@ class UpstoxMarketDataIngestion:
                 db.refresh(sec)
 
             comp_id = f"comp_{symbol.lower()}"
+            bse_val = str(info.get("exchange_token")) if (info and info.get("exchange_token")) else symbol
             company = Company(
                 company_id=comp_id,
                 nse_symbol=symbol,
-                bse_code=symbol,
+                bse_code=bse_val,
                 isin=isin_code,
                 company_name=company_name,
                 sector_id=sec.sector_id,
@@ -311,6 +401,10 @@ class UpstoxMarketDataIngestion:
                 company.company_name = company_name
             if isin_code:
                 company.isin = isin_code
+            if info and info.get("exchange_token") and (not company.bse_code or company.bse_code == symbol):
+                company.bse_code = str(info["exchange_token"])
+            db.commit()
+            db.refresh(company)
             if company.status != "ACTIVE":
                 company.status = "ACTIVE"
             db.commit()

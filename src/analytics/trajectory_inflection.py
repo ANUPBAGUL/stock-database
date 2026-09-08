@@ -47,20 +47,37 @@ class TrajectoryInflectionEngine:
                 "summary": "Insufficient quarterly history to evaluate 2nd derivative acceleration."
             }
 
-        # EBITDA 1st & 2nd derivatives
-        d1_current = ebitda_history[-1] - ebitda_history[-2]
-        d1_prev = ebitda_history[-2] - ebitda_history[-3]
-        d2 = round(d1_current - d1_prev, 2)
+        # EBITDA 1st & 2nd derivatives: Deseasonalize with Year-over-Year differencing if history allows
+        if len(ebitda_history) >= 6:
+            # Full YoY deseasonalization: compare latest YoY quarter delta with preceding quarter's YoY delta
+            d1_current = ebitda_history[-1] - ebitda_history[-5]
+            d1_prev = ebitda_history[-2] - ebitda_history[-6]
+            d2 = round(d1_current - d1_prev, 2)
+            method = "YOY_DESEASONALIZED"
+        elif len(ebitda_history) == 5:
+            # 5 quarters available: latest quarter YoY delta vs baseline
+            d1_current = ebitda_history[-1] - ebitda_history[-5]
+            d1_prev = ebitda_history[-2] - ebitda_history[-3]
+            d2 = round(d1_current - d1_prev, 2)
+            method = "HYBRID_YOY"
+        else:
+            # Sequential quarterly derivatives for short histories (< 5 quarters)
+            d1_current = ebitda_history[-1] - ebitda_history[-2]
+            d1_prev = ebitda_history[-2] - ebitda_history[-3]
+            d2 = round(d1_current - d1_prev, 2)
+            method = "SEQUENTIAL"
 
         is_accelerating = bool(d2 > 0 and d1_current > 0)
 
-        # Margin expansion check
+        # Margin expansion check (deseasonalized YoY if history permits)
         delta_margin = None
-        if margin_history and len(margin_history) >= 2:
+        if margin_history and len(margin_history) >= 5:
+            delta_margin = round(margin_history[-1] - margin_history[-5], 2)
+        elif margin_history and len(margin_history) >= 2:
             delta_margin = round(margin_history[-1] - margin_history[-2], 2)
 
         if is_accelerating and delta_margin and delta_margin > 0:
-            summary = f"Confirmed Inflection: EBITDA accelerating (+₹{d2:.1f} Cr 2nd derivative) with expanding margins (+{delta_margin:.1f}%)."
+            summary = f"Confirmed Inflection: EBITDA accelerating (+₹{d2:.1f} Cr {'YoY ' if method == 'YOY_DESEASONALIZED' else ''}2nd derivative) with expanding margins (+{delta_margin:.1f}%)."
         elif is_accelerating:
             summary = f"EBITDA acceleration positive (+₹{d2:.1f} Cr Δ² EBITDA)."
         else:
@@ -71,6 +88,7 @@ class TrajectoryInflectionEngine:
             "delta_ebitda": round(d1_current, 2),
             "delta2_ebitda": d2,
             "delta_margin": delta_margin,
+            "method": method,
             "summary": summary
         }
 

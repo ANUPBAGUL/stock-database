@@ -1,0 +1,79 @@
+# Institutional Quant Evolution & On-Demand LLM Analyst Copilot
+
+We have implemented the **Quantamental Screener Architecture** and integrated an **On-Demand LLM Institutional Analyst Copilot** grounded strictly in `multibagger.db`.
+
+---
+
+## 1. Architectural Highlights
+
+### ⚡ Default Quant Engine (100% Deterministic, 0 Tokens, Sub-Millisecond)
+1. **Upper-Wick Trap Sentinel**:
+   - Detects false breakout candles with upper wicks exceeding $35\%$–$40\%$ of the daily range and weak closing location ($CRL < 50\%$).
+   - Dynamically elevates the pivot entry price (`adjusted_pivot_entry`) above the overhead trap wick, protecting the portfolio from buying into trapped retail overhead supply.
+2. **Micro-Handle / Final Contraction Gate**:
+   - Analyzes recent 5-day price range relative to ATR (`handle_tightness_ratio`) and volume dry-up ratio.
+   - Classifies base geometry into `A_PRIME_HANDLE` ($tightness \le 1.8 \times ATR$), `LOOSE_HANDLE`, or `V_SHAPE_EXTENDED`.
+3. **Automated 3-Stage Pyramiding Ladder**:
+   - **Tranche 1 (Probe, 50% Size)**: Enters at the clean pivot trigger price with initial risk capped at $0.5\%$.
+   - **Tranche 2 (Pyramid, 50% Size)**: Triggers only after the position advances $+0.5R$.
+   - **Break-Even Ratchet**: Automatically locks the stop-loss to **Break-Even ($+1.0R$)**, transforming the trade into a **free-roll** before trailing the remaining position along the 10-EMA.
+
+---
+
+### 🤖 Grounded On-Demand LLM Analyst Copilot (Zero Token Burn by Default)
+1. **Grounded PIT Dossier Builder (`src/analytics/stock_dossier_builder.py`)**:
+   - Compiles a Point-in-Time research profile querying `multibagger.db` for audited quarterly financials, ROCE, sustainable reinvestment growth, SEBI shareholding (FII, DII, Promoter pledge %), valuation hurdles (Reverse DCF), and BSE exchange announcements.
+   - Uses multi-quarter lookbacks for intermediate filings where balance sheet primitives are filed bi-annually.
+2. **Institutional Research Client (`src/analytics/llm_analyst_client.py`)**:
+   - Strictly on-demand: **zero tokens burned** during background screeners, auto-refreshes, or batch queries.
+   - Supports Google Gemini 1.5 Flash and OpenAI GPT-4o-mini when API keys are provided.
+   - Features a high-IQ **Deterministic Institutional Synthesizer** when offline, generating a structured 4-pillar institutional memo with zero hallucination.
+3. **4-Part Institutional Investment Memo**:
+   - **Section 1: Core Economic Engine** (Compounding runway, margin moat, ROCE sustainability).
+   - **Section 2: Forensic Audit & Governance** (Promoter pledge encumbrance, D/E leverage, CFO/PAT accrual quality).
+   - **Section 3: Falsification & Bear Case** (Exact quarterly OPM, CFO conversion, and structural stop triggers).
+   - **Section 4: Tactical Execution Blueprint** (50/50 staged probe, break-even milestone price, 10-EMA trailing exit).
+
+---
+
+## 2. Visual Walkthrough
+
+### Live Google Gemini 3.6 Flash Institutional Memo Modal
+The screenshot below shows the live on-demand institutional research memo generated for `MANORAMA` using **Google Gemini 3.6 Flash**:
+
+![Live Google Gemini 3.6 Flash Memo](C:\Users\bagul\.gemini\antigravity-ide\brain\2b63cea4-2fe1-4df1-a6a0-29a93e7f2826\manorama_gemini_memo_1788637245175.png)
+
+### Key UI Features Verified:
+- **Provider Badge**: Dynamically transitioned to **`GOOGLE GEMINI 3.6 FLASH`** in emerald green.
+- **Token Counter & Latency**: Consumed **4,148 tokens** and completed in **28.9s**.
+- **Institutional Synthesis Quality**: Grounded directly in `multibagger.db` numbers (ROCE 59.8%, TTM Revenue ₹2,525 Cr, TTM PAT ₹428 Cr, P/E 4.0x, FCF Yield 11.5%, Promoter Pledge 0.0%).
+- **Interactive Follow-up Copilot**: Ready for follow-up research questions directly from the terminal or browser modal.
+
+---
+
+## 3. Verification & Test Results
+
+### 1. Full Regression Test Suite
+Executed the entire repository test suite across all 16 test modules:
+```bash
+python -m unittest discover -s tests -p "test_*.py"
+```
+- **Total Tests Run**: 89 tests
+- **Pass Rate**: 100% (89 passed, 0 failures, 0 errors, 0 regressions)
+- **Execution Duration**: 11.97s
+
+### 2. Dedicated LLM Analyst & Quant Engine Tests
+Verified `tests/test_llm_analyst.py`:
+- `test_dossier_builder_valid_stock`: **PASS** (extracts ROCE, D/E, promoter pledge, and pyramiding ladder from database).
+- `test_dossier_builder_unknown_stock`: **PASS** (handles unknown tickers gracefully with structured error).
+- `test_llm_analyst_offline_synthesis`: **PASS** (generates all 4 pillars with 0 token waste).
+- `test_llm_analyst_custom_question`: **PASS** (incorporates interactive follow-up prompt).
+- `test_upper_wick_trap_sentinel`: **PASS** (verifies wick ratio $>40\%$ triggers sentinel and raises clean pivot).
+- `test_micro_handle_gate_and_pyramiding_ladder`: **PASS** (verifies 50/50 probe & pyramid calculations and $+1.0R$ break-even lock).
+
+### 3. Live HTTP API Endpoints Verified
+All endpoints tested live on port 8060:
+- `GET /api/screener/presets`: Status 200 OK
+- `GET /api/analyst/dossier?symbol=MANORAMA`: Status 200 OK
+- `GET /api/analyst/deep-dive?symbol=MANORAMA`: Status 200 OK (33.0 ms)
+- `POST /api/analyst/query`: Status 200 OK

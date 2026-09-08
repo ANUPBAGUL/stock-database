@@ -71,9 +71,12 @@ class PriceAdjuster:
             # Compute cumulative adjustment factor:
             # Multiply all price_factors where price.trading_date < action.ex_date (and <= cutoff_date if set)
             cum_price_factor = 1.0
-            for act in action_list:
-                if act["ex_date"] > price.trading_date and (cutoff_date is None or act["ex_date"] <= cutoff_date):
-                    cum_price_factor *= act["price_factor"]
+            # If price series is already split-adjusted (e.g. from Yahoo Finance), bypass compounding split factors
+            is_already_adj = getattr(price, "is_split_adjusted", False) or (getattr(price, "price_source", "") == "YFINANCE")
+            if not is_already_adj:
+                for act in action_list:
+                    if act["ex_date"] > price.trading_date and (cutoff_date is None or act["ex_date"] <= cutoff_date):
+                        cum_price_factor *= act["price_factor"]
 
             raw_vol = price.volume if price.volume is not None else 0
             adj_volume = int(raw_vol / cum_price_factor) if (cum_price_factor > 0 and raw_vol is not None) else raw_vol

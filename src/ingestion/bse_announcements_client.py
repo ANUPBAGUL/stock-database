@@ -11,13 +11,16 @@ Captures:
 - Zero third-party news blog aggregators
 """
 
+import hashlib
 import logging
-from datetime import datetime, date
+from datetime import datetime, date, timezone, timedelta
 from typing import Dict, Any, List, Optional, Tuple
 from curl_cffi import requests as cffi_requests
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
+IST = timezone(timedelta(hours=5, minutes=30))
 
 BSE_SCRIP_MAP = {
     "DIXON": "540699",
@@ -128,15 +131,17 @@ class BseAnnouncementsClient:
                                     clean_dt_tm = dt_tm_str.split(".")[0].strip()
                                     for fmt in ("%Y-%m-%dT%H:%M:%S", "%Y-%m-%d %H:%M:%S", "%d/%m/%Y %H:%M:%S", "%d-%m-%Y %H:%M:%S", "%d-%b-%Y %H:%M:%S"):
                                         try:
-                                            pub_dt = datetime.strptime(clean_dt_tm, fmt)
+                                            pub_dt = datetime.strptime(clean_dt_tm, fmt).replace(tzinfo=IST)
                                             break
                                         except ValueError:
                                             continue
                                     if not pub_dt:
                                         try:
                                             pub_dt = datetime.fromisoformat(clean_dt_tm)
+                                            if pub_dt.tzinfo is None:
+                                                pub_dt = pub_dt.replace(tzinfo=IST)
                                         except Exception:
-                                            pub_dt = datetime.utcnow()
+                                            pub_dt = datetime.now(timezone.utc)
 
                                 doc_url = None
                                 if attachment_name and attachment_name.strip():
@@ -144,8 +149,13 @@ class BseAnnouncementsClient:
 
                                 event_type, materiality = self._classify_filing(headline, category_name)
 
+                                # Deterministic event ID using SHA-256
+                                raw_id_str = f"BSE_{sym_clean}_{dt_tm_str}_{headline[:50]}"
+                                event_id = news_id or f"bse_{hashlib.sha256(raw_id_str.encode('utf-8')).hexdigest()[:16]}"
+
+                                now_utc_iso = datetime.now(timezone.utc).isoformat()
                                 results.append({
-                                    "event_id": news_id or str(hash(f"{sym_clean}_{dt_tm_str}_{headline[:30]}")),
+                                    "event_id": event_id,
                                     "symbol": sym_clean,
                                     "exchange": "BSE",
                                     "bse_scrip_code": scrip_code,
@@ -154,8 +164,8 @@ class BseAnnouncementsClient:
                                     "category": category_name,
                                     "event_type": event_type,
                                     "materiality": materiality,
-                                    "source_published_at": pub_dt.isoformat() if pub_dt else datetime.utcnow().isoformat(),
-                                    "ingested_at": datetime.utcnow().isoformat(),
+                                    "source_published_at": pub_dt.isoformat() if pub_dt else now_utc_iso,
+                                    "ingested_at": now_utc_iso,
                                     "event_occurred_at": None,
                                     "source_document_url": doc_url,
                                     "source_type": "OFFICIAL_EXCHANGE_FILING",
@@ -189,8 +199,13 @@ class BseAnnouncementsClient:
                         doc_url = attch if attch and attch.startswith("http") else (f"https://nsearchives.nseindia.com/corporate/{attch}" if attch else None)
                         event_type, materiality = self._classify_filing(subject, "NSE_LODR_DISCLOSURE")
 
+                        # Deterministic event ID using SHA-256
+                        raw_nse_id = f"NSE_{sym_clean}_{an_dt_str}_{subject[:50]}"
+                        event_id = f"nse_{hashlib.sha256(raw_nse_id.encode('utf-8')).hexdigest()[:16]}"
+                        now_utc_iso = datetime.now(timezone.utc).isoformat()
+
                         results.append({
-                            "event_id": str(hash(f"{sym_clean}_{an_dt_str}_{subject[:30]}")),
+                            "event_id": event_id,
                             "symbol": sym_clean,
                             "exchange": "NSE",
                             "bse_scrip_code": scrip_code,
@@ -199,8 +214,8 @@ class BseAnnouncementsClient:
                             "category": "NSE_LODR_DISCLOSURE",
                             "event_type": event_type,
                             "materiality": materiality,
-                            "source_published_at": an_dt_str or datetime.utcnow().isoformat(),
-                            "ingested_at": datetime.utcnow().isoformat(),
+                            "source_published_at": an_dt_str or now_utc_iso,
+                            "ingested_at": now_utc_iso,
                             "event_occurred_at": None,
                             "source_document_url": doc_url,
                             "source_type": "OFFICIAL_EXCHANGE_FILING",

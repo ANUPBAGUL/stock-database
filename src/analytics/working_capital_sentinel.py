@@ -241,11 +241,21 @@ class WorkingCapitalSentinel:
         risk_score = min(100, risk_score)
 
         # Classification
-        if risk_score >= 50 or cfo_status == "SEVERE_EARNINGS_QUALITY_TRAP":
+        # Hard Working Capital Trap Circuit Breaker: Requires either broad multi-metric deterioration (risk_score >= 50)
+        # or negative CFO paired with elevated/drifting receivables (DSO >= 65 days or divergent receivables).
+        is_severe_cfo = (cfo_status == "SEVERE_EARNINGS_QUALITY_TRAP")
+        has_healthy_collections = (dso is not None and dso < 65.0 and not is_rec_divergent)
+
+        if risk_score >= 50 or (is_severe_cfo and not has_healthy_collections):
             regime = "WORKING_CAPITAL_TRAP"
             badge_class = "badge-rose"
             is_circuit_breaker_triggered = True
-            summary = "High forensic risk: Uncollected receivables and cash flow conversion failure."
+            summary = "High forensic risk: Elevated debtor days/receivables paired with cash flow conversion failure."
+        elif is_severe_cfo and has_healthy_collections:
+            regime = "AGGRESSIVE_RECOGNITION_RISK"
+            badge_class = "badge-amber"
+            is_circuit_breaker_triggered = False
+            summary = f"Cash flow conversion deficit (CFO < 0) during working capital expansion; customer debtor collections remain prompt (DSO {dso:.1f}d)."
         elif risk_score >= 30 or is_rec_divergent:
             regime = "AGGRESSIVE_RECOGNITION_RISK"
             badge_class = "badge-amber"

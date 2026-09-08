@@ -497,6 +497,7 @@ class TestPITTruthDatabase(unittest.TestCase):
         ann = CorporateAnnouncement(
             company_id=test_comp_id,
             symbol="TESTABS",
+            source_published_at=now - timedelta(days=25),
             publication_timestamp=now - timedelta(days=25),
             event_type="CAPEX",
             track_type="STRUCTURAL",

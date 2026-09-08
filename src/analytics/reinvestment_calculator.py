@@ -80,10 +80,17 @@ class ReinvestmentCalculator:
             inc_ebit = (curr_f.ebit or 0.0) - (prev_f.ebit or 0.0)
             inc_rev = (curr_f.revenue or 0.0) - (prev_f.revenue or 0.0)
 
-            # Incremental ROCE
+            # Annualize incremental EBIT if quarterly statements are used
+            days_diff = abs((curr_f.period_end_date - prev_f.period_end_date).days)
+            if curr_f.period_type == "QUARTERLY" or days_diff < 150:
+                inc_ebit_ann = inc_ebit * 4.0
+            else:
+                inc_ebit_ann = inc_ebit
+
+            # Incremental ROCE (annualized EBIT / incremental capital deployed)
             inc_roce = None
             if inc_cap > 10.0: # Minimum ₹10 Cr incremental capital deployed
-                calc_val = (inc_ebit / inc_cap) * 100.0
+                calc_val = (inc_ebit_ann / inc_cap) * 100.0
                 inc_roce = round(min(200.0, max(-100.0, calc_val)), 2)
 
             # Reinvestment Rate: CapEx / CFO
@@ -156,14 +163,23 @@ class ReinvestmentCalculator:
         capex = max(0.0, total_capex_cr)
         delta_sales = max(0.0, sales_current_cr - sales_previous_cr)
 
-        # Baseline Maintenance CapEx with inflation adjustment
+        # 1. Greenwald PPE/Sales Intensity Ratio
+        if gross_block_cr is not None and gross_block_cr > 0 and sales_current_cr > 0:
+            ppe_sales_ratio = gross_block_cr / sales_current_cr
+        else:
+            ppe_sales_ratio = 0.85  # Institutional empirical benchmark for industrial compounders
+
+        # 2. Greenwald Theoretical Growth CapEx required to support observed sales delta
+        greenwald_growth_capex = round(ppe_sales_ratio * delta_sales, 2)
+
+        # 3. Baseline Maintenance CapEx with replacement inflation adjustment
         inflation_mult = 1.0 + (inflation_rate_pct / 100.0)
         baseline_maint = depr * inflation_mult
 
-        # Clamp maintenance capex to realistic boundaries
+        # 4. Clamp maintenance capex to realistic boundaries [0.70 * Depr, 1.30 * Depr]
         maint_capex = min(capex, max(0.70 * depr, min(1.30 * depr, baseline_maint)))
         
-        # Growth CapEx is the genuine capacity expansion
+        # 5. Empirical Growth CapEx is the genuine capacity expansion
         growth_capex = max(0.0, round(capex - maint_capex, 2))
         maint_capex = round(maint_capex, 2)
 
@@ -174,6 +190,9 @@ class ReinvestmentCalculator:
             "maintenance_capex_cr": maint_capex,
             "growth_capex_cr": growth_capex,
             "growth_capex_share_pct": growth_share_pct,
+            "greenwald_implied_growth_capex_cr": greenwald_growth_capex,
+            "ppe_to_sales_ratio": round(ppe_sales_ratio, 2),
+            "delta_sales_cr": round(delta_sales, 2),
             "maintenance_depr_coverage_ratio": round(maint_capex / depr, 2),
             "depreciation_cr": round(depr, 2),
             "maintenance_capex_method": "GREENWALD_DEPRECIATION_CLAMPED",

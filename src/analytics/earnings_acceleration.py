@@ -143,23 +143,43 @@ class EarningsAccelerationEngine:
         opm_q4 = round((ebit_q4 / max(0.1, rev_q4)) * 100.0, 2) if rev_q4 else 0.0
         opm_delta = round(opm_q0 - opm_q4, 2)
 
-        # Multi-horizon PAT Acceleration (1Q vs 2Q vs 4Q lookbacks)
-        pat_accel_1q = pat_accel
-        pat_accel_2q = 0.0
-        pat_accel_4q = 0.0
+        # Sequential Quarterly PAT Accelerations:
+        # Accel(Q0) = YoY(Q0) - YoY(Q-1)
+        # Accel(Q-1) = YoY(Q-1) - YoY(Q-2)
+        # Accel(Q-2) = YoY(Q-2) - YoY(Q-3)
+        accel_q0 = pat_accel
+        accel_q1 = None
+        accel_q2 = None
 
+        pat_yoy_q2 = None
         if len(q) >= 7:
-            # 2Q ago
             q_minus_2 = q[-3]
             q_minus_6 = q[-7]
-            pat_yoy_q2 = yoy_growth(q_minus_2.get("net_profit_cr", 0.0) or q_minus_2.get("pat_cr", 0.0),
-                                    q_minus_6.get("net_profit_cr", 0.0) or q_minus_6.get("pat_cr", 0.0))
-            pat_accel_2q = round(pat_yoy_q0 - pat_yoy_q2, 2)
+            pat_q2 = q_minus_2.get("net_profit_cr", 0.0) or q_minus_2.get("pat_cr", 0.0)
+            pat_q6 = q_minus_6.get("net_profit_cr", 0.0) or q_minus_6.get("pat_cr", 0.0)
+            pat_yoy_q2 = yoy_growth(pat_q2, pat_q6)
+            accel_q1 = round(pat_yoy_q1 - pat_yoy_q2, 2)
 
-        # Compute Persistence (Consecutive quarters of positive acceleration)
-        persistence_count = 1 if pat_accel > 0 else 0
-        if pat_accel_2q > 0 and persistence_count == 1:
-            persistence_count = 2
+        if len(q) >= 8 and pat_yoy_q2 is not None:
+            q_minus_3 = q[-4]
+            q_minus_7 = q[-8]
+            pat_q3 = q_minus_3.get("net_profit_cr", 0.0) or q_minus_3.get("pat_cr", 0.0)
+            pat_q7 = q_minus_7.get("net_profit_cr", 0.0) or q_minus_7.get("pat_cr", 0.0)
+            pat_yoy_q3 = yoy_growth(pat_q3, pat_q7)
+            accel_q2 = round(pat_yoy_q2 - pat_yoy_q3, 2)
+
+        # Multi-horizon cumulative changes
+        pat_accel_1q = accel_q0
+        pat_accel_2q = round(pat_yoy_q0 - pat_yoy_q2, 2) if pat_yoy_q2 is not None else 0.0
+
+        # Compute Genuine Persistence (Consecutive quarters of positive acceleration starting at Q0)
+        persistence_count = 0
+        if accel_q0 > 0:
+            persistence_count = 1
+            if accel_q1 is not None and accel_q1 > 0:
+                persistence_count = 2
+                if accel_q2 is not None and accel_q2 > 0:
+                    persistence_count = 3
 
         # Synthesis Classification
         is_accelerating = (pat_accel > 5.0 and rev_accel > 0.0) or (ebit_accel > 8.0 and opm_delta > 1.0)

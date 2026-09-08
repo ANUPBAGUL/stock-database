@@ -170,7 +170,7 @@ class AnnouncementDecayEngine:
         cls,
         raw_score: float,
         track_type: str,
-        publication_time: datetime,
+        publication_time: Any,
         current_time: Optional[datetime] = None
     ) -> Tuple[float, str]:
         """
@@ -178,16 +178,34 @@ class AnnouncementDecayEngine:
         S(t) = S_raw * e^(-lambda * delta_hours)
         Returns: (decayed_score, new_status)
         """
-        now = current_time or datetime.now(timezone.utc)
-        pub_dt = publication_time
-        if hasattr(now, "tzinfo") and now.tzinfo is not None:
-            if hasattr(pub_dt, "tzinfo") and pub_dt.tzinfo is None:
-                pub_dt = pub_dt.replace(tzinfo=timezone.utc)
+        # Standardize 'now' to UTC-aware datetime
+        if current_time is None:
+            now_utc = datetime.now(timezone.utc)
+        elif hasattr(current_time, "tzinfo") and current_time.tzinfo is not None:
+            now_utc = current_time.astimezone(timezone.utc)
         else:
-            if hasattr(pub_dt, "tzinfo") and pub_dt.tzinfo is not None:
-                pub_dt = pub_dt.replace(tzinfo=None)
+            now_utc = current_time.replace(tzinfo=timezone.utc)
 
-        delta_hours = max(0.0, (now - pub_dt).total_seconds() / 3600.0)
+        # Parse publication_time if string
+        pub_dt = publication_time
+        if isinstance(pub_dt, str):
+            try:
+                pub_dt = datetime.fromisoformat(pub_dt)
+            except Exception:
+                pub_dt = now_utc
+
+        IST = timezone(timedelta(hours=5, minutes=30))
+        if hasattr(pub_dt, "tzinfo") and pub_dt.tzinfo is not None:
+            pub_dt_utc = pub_dt.astimezone(timezone.utc)
+        else:
+            # If current_time was explicitly provided as naive, keep same reference frame
+            if current_time is not None and getattr(current_time, "tzinfo", None) is None:
+                pub_dt_utc = pub_dt.replace(tzinfo=timezone.utc)
+            else:
+                # Live naive exchange timestamp from BSE/NSE defaults to IST
+                pub_dt_utc = pub_dt.replace(tzinfo=IST).astimezone(timezone.utc)
+
+        delta_hours = max(0.0, (now_utc - pub_dt_utc).total_seconds() / 3600.0)
 
         half_life_hours = HALF_LIFE_STRUCTURAL_HOURS if track_type == "STRUCTURAL" else HALF_LIFE_TACTICAL_HOURS
         decay_constant = math.log(2) / half_life_hours
@@ -218,7 +236,7 @@ class AnnouncementDecayEngine:
         """
         Refreshes the decayed scores and lifecycle status for all active announcements in the database.
         """
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
         active_items = db.query(CorporateAnnouncement).filter(
             CorporateAnnouncement.status.in_(["NEW_ACTIVE", "DECAYING"])
         ).all()

@@ -378,6 +378,183 @@ graph TD
 
 ---
 
+## Layer 13: Research-Grade 4-Layer Positional Swing Trading Engine (2–6 Weeks / 45-Day Horizon)
+
+Implements Kristjan Qullamaggie's momentum breakouts, Mark Minervini's SEPA 8-point trend template, and Stan Weinstein's Stage 2 analysis with an empirical, multi-horizon point-in-time replay engine (`HistoricalSwingReplayEngine`).
+
+```mermaid
+flowchart TD
+    subgraph L1 ["Layer 1: Setup Detection"]
+        S1["VCP Contraction Breakout"]
+        S2["52W High Breakout"]
+        S3["Base Consolidation"]
+        S4["50EMA Pullback"]
+        S5["Failed Setup / Reversal Trap"]
+    end
+
+    subgraph L2 ["Layer 2: Setup Quality (Frozen)"]
+        Q1["Normalized Contraction: ATR10 / ATR30"]
+        Q2["Normalized Dry-up: Vol5 / Vol40"]
+        Q3["Positive Volume Asymmetry: Up/Down Vol >= 1.5x"]
+        Q4["Contraction Quality: HEALTHY / NEUTRAL / DANGEROUS"]
+        Q5["Structural Readiness Score (0-100)"]
+    end
+
+    subgraph L3 ["Layer 3: Empirical Conditional Probability & Uncertainty"]
+        P1["Hierarchical Grouping: Setup x Contraction x Regime"]
+        P2["Wilson Score 95% Confidence Intervals"]
+        P3["Sample Size Evidence Tier: LOW (n<15) / MODERATE (15-49) / HIGH (n>=50)"]
+        P4["Multi-Horizon MFE/MAE Trajectories (1D to 45D)"]
+        P5["Strict Pre-Stop MFE Isolation (Zero Post-Exit Contamination)"]
+        P6["Same-Bar Ambiguity Policy (Conservative vs Ambiguity-Excluded vs Optimistic)"]
+    end
+
+    subgraph L4 ["Layer 4: Portfolio Decision"]
+        D1["Adaptive Microstructure Pivot Entry"]
+        D2["Structural Invalidation Floor Stop"]
+        D3["1.0% Account Risk Budget (0% if Risk > 8.5%)"]
+        D4["Dual Targets: T1 Base Move / T2 Positional Extension"]
+        D5["Regime Exposure Halving (Bear Defensive)"]
+    end
+
+    L1 --> L2
+    L2 --> L3
+    L3 --> L4
+```
+
+### Key Research-Grade Invariants:
+1. **Zero Circularity Invariant:** `swing_readiness_score` is computed purely from Layer 2 structural quality and remains 100% independent of in-sample backtest calibration.
+2. **Structural Invalidation Immunity Invariant:** Layer 3 empirical probabilities inform, but **NEVER override** Layer 2 structural invalidation. If a stock is categorized as `FAILED_SETUP` or price violates support, `is_active` is strictly `False`.
+3. **Temporal Invariance Invariant:** Calibration at $T_0$ uses strictly trades with realization date $< T_0$.
+4. **Pre-Stop MFE Isolation:** MFE during position life measures only favorable excursion *before or at the exit session*, strictly excluding post-exit rebounds.
+5. **Same-Bar Ambiguity Policy:** Trades touching both stop and target on the same day are executed conservatively (Stop First) by default, while ambiguity-excluded win rates are reported side-by-side.
+
+### Experiment Freeze: EXP-SWING-001
+All signal definitions (Minervini template, ATR contraction, volume dry-up, adaptive pivot buffer, structural stop) are **strictly frozen**. Ongoing research focuses entirely on scaling the walk-forward dataset across 200–500 companies and multiple market cycles.
+
+---
+
+## 8. Decoupled 4-Vector Quantamental Screener & Continuous Discovery Engine
+
+The laboratory integrates a high-speed, zero-wait discovery and multi-horizon screening engine across 5,000+ Indian equities (NSE + BSE) backed by point-in-time financial statements, Upstox market feeds, and Screener/Chartink query adapters.
+
+```
+                     5,000+ BSE & NSE LISTINGS
+                                │
+                                ▼
+                   ┌─────────────────────────┐
+                   │ STAGE 0: ENTITY MASTER  │  ISIN-based Deduplication
+                   │ Canonical Security Key  │  Primary Venue Routing
+                   └────────────┬────────────┘
+                                │ (~4,200 Unique Entities)
+                                ▼
+                   ┌─────────────────────────┐
+                   │ STAGE 1: NEGATIVE SIEVE │  Drops ONLY uninvestable junk:
+                   │ Permissive Risk Filter  │  • D/E > 4.0 / Insolvent NW
+                   └────────────┬────────────┘  • Zero volume / shells
+                                │ (~2,450 Investable)
+                                ▼
+                   ┌─────────────────────────┐
+                   │ STAGE 2: INFLECTION     │  Continuous 0–100 Ranking:
+                   │ Economic Momentum Rank  │  • ROCE Percentile Rank
+                   └────────────┬────────────┘  • Operating Leverage & CCC
+                                │ (Top Survivors)
+                                ▼
+                   ┌─────────────────────────┐
+                   │ STAGE 3: 4-VECTOR MATRIX│  1. Business Potential (0–100)
+                   │ Decoupled Orthogonal    │  2. Expectations Gap (%)
+                   │ Intelligence Engine     │  3. Tape Confirmation (0–100)
+                   └────────────┬────────────┘  4. Entry Setup Quality (0–100)
+                                │
+          ┌─────────────────────┼─────────────────────┐
+          ▼                     ▼                     ▼
+ 🌟 TOP COMPOUNDERS    💎 STRATEGIC WATCHLIST  📈 SWING RADAR (VCP)
+ (Potential ≥ 85,      (High Potential ≥ 75,   (Entry Quality ≥ 75,
+  Asym Gap ≥ 8%)        Entry Setup Pending)    R:R ≥ 2.33, ATR SL/TGT)
+```
+
+### 1. Eliminating the "Cliff Effect" via Permissive Negative Sieve
+* **Stage 1 (Negative Sieve):** Replaces brittle hard thresholds (`ROCE > 15%`, `D/E < 1.0`, `52W Proximity < 35%`) with an insolvency and liquidity sieve, ensuring turnaround multibaggers with optical trailing weakness are never discarded.
+* **Stage 0 (ISIN Entity Resolution):** Deduplicates dual listings across NSE and BSE by ISIN code (`INE...`), dynamically routing execution to the primary liquid venue.
+* **Stage 2 (Continuous Factor Ranking):** Evaluates gross margin expansion, working capital cycle contraction, and operating leverage velocity on a continuous $0–100$ percentile curve.
+
+### 2. The 4 Decoupled Orthogonal Vectors (*Mauboussin Matrix*)
+Every candidate is broken into 4 orthogonal dimensions:
+1. 🏛️ **Business Potential Score ($0–100$):** Structural moat, Greenwald CapEx reinvestment runway, and operating leverage ($P1 + P2 + P3$).
+2. ⚖️ **Expectations Asymmetry Gap ($\%$):** Reverse-DCF market-implied growth vs. sustainable compounding ceiling ($P4$).
+3. 📊 **Tape Confirmation Score ($0–100$):** Mansfield Relative Strength, Stage 2 Trend, and accumulation volume ($P5$).
+4. 🎯 **Entry Setup Quality ($0–100$):** Volatility Contraction Pattern (VCP) tightness and ATR-defined Risk/Reward ratio ($\ge 1:2.33$).
+
+### 3. Statistical Honesty: M7 Asymmetry Index
+* Replaces uncalibrated probability claims with the **`M7 Asymmetry Index (0–100)`** and **`Multibagger Likelihood Rank`** (`CONVICTION`, `HIGH`, `MEDIUM`, `EMERGING`).
+
+### 4. 💎 Strategic Watchlist Feed
+* Solves the dilemma of *"Great Business, Poor Current Entry"*: Stocks with high potential ($\ge 75$) but pending breakout setup ($< 70$) are preserved directly in the **Strategic Watchlist Feed**.
+
+---
+
+---
+
+# Layer 13: Research-Grade Positional Swing Trading Engine (2–6 Weeks / 45-Day Horizon, EXP-SWING-001)
+
+### The 4-Layer Decoupled Architecture
+
+```
+                    STOCK
+                      │
+                      ▼
+              L1 Setup Detection (Minervini Stage 2, VCP, 52W Breakout, 50EMA Pullback)
+                      │
+                      ▼
+               L2 Structure (Normalized ATR Contraction, Volume Asymmetry, Adaptive Buffer)
+                      │
+          ┌───────────┴───────────┐
+          │                       │
+     Valid Setup             Failed Setup
+          │                       │
+          ▼                       ▼
+     L3 Empirical             REJECT (is_active = False)
+     Probability &            (Invariant: L3 cannot override L2 disqualification)
+     Uncertainty
+          │
+          ▼
+   P(T1), Wilson 95% CI, E[R | X] (Bayesian Shrunk)
+          │
+          ▼
+       L4 Risk & Portfolio Sizing (1% Budget, Regime-adjusted R-units)
+          │
+    ┌─────┴─────┐
+    │           │
+  Accept       Reject
+    │
+    ▼
+ Position Sizing & Capital Allocation
+    │
+    ▼
+  EXECUTED TRADE
+```
+
+### Core Empirical Invariants of EXP-SWING-001
+
+1. **Frozen Signal Specification:** All technical criteria (Minervini 8-point trend template, normalized ATR contraction $<0.85$, volume dry-up $<0.75$, adaptive buffer $\min(1.02, 1 + 0.15 \times ATR/P)$, structural floor stop $\min(Low_{swing}, Low_{pivot}) - 0.20 \times ATR$) are frozen. No ad-hoc indicators or parameter tweaks permitted.
+2. **Structural Invalidation Immunity Invariant:** Layer 3 empirical metrics never override Layer 2 structural disqualification. If a setup violates support or breaks pivot (`FAILED_SETUP`), `is_active` remains strictly `False`.
+3. **Zero Circularity Invariant:** `swing_readiness_score` is computed purely from geometric and volume properties and is 100% independent of backtest calibration data.
+4. **Synthetic Ambiguity Test Verification:** Explicitly tested against synthetic dual-breach candles (`High=106, Low=94, Stop=95, Target=105`). Verifies:
+   - Conservative: Stop first $\to$ loss ($0\%$ win rate)
+   - Optimistic: Target first $\to$ win ($100\%$ win rate)
+   - Ambiguity Excluded: Ambiguous trade completely removed from win-rate calculation
+5. **Pre-Stop MFE vs. Full 45-Day Path Isolation:** Pre-stop MFE strictly measures favorable excursion while the position was alive prior to exit; post-stop rebounds are quarantined to the 45-day path metric.
+6. **Empirical Bayesian Shrinkage on Conditional Expectancies:** Small subgroups are shrunk toward parent priors using $w = \frac{n}{n + 15}$:
+   $$E[R \mid X]_{shrunk} = w \cdot \bar{R}_{observed} + (1 - w) \cdot \bar{R}_{universe}$$
+   Preventing $n=7$ clusters from presenting overconfident expectations (e.g. raw $+1.32R \to +0.58R$).
+7. **Strict Temporal Invariance / Outcome-Completion Invariant:** Calibration data available at $T_0$ is defined strictly as:
+   $$\mathcal{D}_{calibration}(T_0) = \{ \text{trades whose outcome was fully observable before } T_0 \quad (\text{exit\_date} < T_0) \}$$
+   A trade entered 10 days before $T_0$ with an active 45-day holding horizon cannot contribute its outcome to $T_0$ calibration.
+8. **Sample Size & Overall Evidence Tiers:** Categorized strictly as `LIMITED` ($n < 20$), `PRELIMINARY` ($20 \le n < 150$), `MODERATE` ($150 \le n < 400$), and `ADEQUATE` ($n \ge 400$). The current 77-trade replay across 24 companies is formally classified as **`Overall Evidence: PRELIMINARY`**, reserving `ADEQUATE` for multi-year, multi-regime studies exceeding 400 independent episodes.
+9. **Probabilistic Reliability & Benchmark Auditing (Brier Diagnostics):** Model probability predictions are benchmarked against the unconditional climatological base rate ($Brier_{unconditional}$) and setup-type empirical rates, calculating the Brier Skill Score ($BSS = 1 - Brier_{model} / Brier_{unconditional}$) alongside bucketed reliability curves (predicted vs. observed win rate) to rigorously detect and penalize probability overconfidence.
+
+---
+
 ## Verification & Test Standard
 
 The entire pipeline is validated through automated test suites:
@@ -388,6 +565,10 @@ The entire pipeline is validated through automated test suites:
 * `tests/test_200iq_research_pipeline.py`: Verifies Competitive Engine HHI, Pricing Power, Research Snapshots, and M7 Harness.
 * `tests/test_valuation_engine.py`: Verifies 3-Pillar Valuation PEG, FCF yield spread, Reverse-DCF solver, and 6 regime states.
 * `tests/test_5pillar_multibagger_suite.py`: Verifies all 5 pillars, forensic debtor drift traps, and circuit breaker disqualifications.
+* `tests/test_screener_service.py`: Verifies permissive negative sieve, continuous ranking, 4 decoupled vectors, and dynamic attrition.
+* `tests/test_swing_radar_engine.py`: Verifies Minervini 8-point template, normalized ATR, adaptive buffer, structural stop, and multi-horizon router.
+* `tests/test_swing_replay_engine.py`: Verifies synthetic same-bar ambiguity detection, pre-stop MFE isolation, Bayesian shrinkage, outcome completion temporal filter, Wilson 95% CIs, and Brier score.
 * `tests/institutional/`: 41 tests verifying Acceptance Invariants A through H.
-* **Master Test Suite Status:** `118 / 118 Tests Passing (100% Success)`.
+* **Master Test Suite Status:** `149 / 149 Tests Passing (100% Success)`.
+
 

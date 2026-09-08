@@ -50,10 +50,10 @@ class TestValuationEngine:
         assert status == "VALID"
         assert peg == 8.0  # 40 / 5.0
 
-        # Extremely high growth (120%) clamped to maximum 60%
+        # Extremely high growth (120%) computes genuine PEG with HYPERGROWTH_BASE_EFFECT flag
         peg, status = ValuationEngine.calculate_peg_ratio(60.0, 120.0)
-        assert status == "VALID"
-        assert peg == 1.0  # 60 / 60.0
+        assert status == "HYPERGROWTH_BASE_EFFECT"
+        assert peg == 0.5  # 60.0 / 120.0
 
     def test_fcf_yield_and_gsec_spread(self):
         # FCF = 700 Cr, Market Cap = 10,000 Cr -> Yield = 7.0%
@@ -79,6 +79,18 @@ class TestValuationEngine:
         assert implied_g is not None
         assert isinstance(implied_g, float)
         assert 5.0 <= implied_g <= 25.0
+
+        # NOPAT fallback when FCF is non-positive due to growth CapEx
+        implied_g_nopat = ValuationEngine.solve_reverse_dcf_implied_growth(
+            market_cap_cr=2000.0,
+            ttm_fcf_cr=-20.0,
+            ttm_nopat_cr=100.0,
+            cost_of_equity=0.12,
+            terminal_growth=0.055,
+            forecast_years=5
+        )
+        assert implied_g_nopat is not None
+        assert implied_g_nopat == implied_g
 
         # Boundary checks
         assert ValuationEngine.solve_reverse_dcf_implied_growth(0.0, 100.0) is None

@@ -106,7 +106,12 @@ class BitemporalIngestionEngine:
                 ("net_worth", metrics.get("net_worth")),
                 ("total_assets", metrics.get("total_assets")),
                 ("operating_cash_flow", metrics.get("operating_cash_flow")),
-                ("capex", metrics.get("capex"))
+                ("capex", metrics.get("capex")),
+                ("free_cash_flow", metrics.get("free_cash_flow")),
+                ("trade_receivables", metrics.get("trade_receivables")),
+                ("current_liabilities", metrics.get("current_liabilities") or metrics.get("other_liabilities")),
+                ("equity_share_capital", metrics.get("equity_share_capital") or metrics.get("equity_capital")),
+                ("reserves_and_surplus", metrics.get("reserves_and_surplus") or metrics.get("reserves"))
             ]
             has_changed = any(not _is_close(getattr(existing_active, f_name, None), f_val) for f_name, f_val in fields_to_check if f_val is not None)
 
@@ -144,15 +149,18 @@ class BitemporalIngestionEngine:
             # Cash flow
             operating_cash_flow=metrics.get("operating_cash_flow"),
             capex=metrics.get("capex"),
+            free_cash_flow=metrics.get("free_cash_flow"),
             # Balance sheet — full primitives
             total_debt=metrics.get("total_debt"),
             cash_and_equivalents=metrics.get("cash_and_equivalents"),
             total_assets=metrics.get("total_assets"),
             total_liabilities=metrics.get("total_liabilities"),
             net_worth=metrics.get("net_worth"),
+            equity_share_capital=metrics.get("equity_share_capital") or metrics.get("equity_capital"),
+            reserves_and_surplus=metrics.get("reserves_and_surplus") or metrics.get("reserves"),
             shares_outstanding=metrics.get("shares_outstanding"),
             trade_receivables=metrics.get("trade_receivables"),
-            current_liabilities=metrics.get("current_liabilities"),
+            current_liabilities=metrics.get("current_liabilities") or metrics.get("other_liabilities"),
             # Debt disaggregation (Fix 3 schema fields)
             financial_debt_lt=metrics.get("financial_debt_lt"),
             financial_debt_st=metrics.get("financial_debt_st"),

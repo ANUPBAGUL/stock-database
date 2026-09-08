@@ -46,11 +46,19 @@ class PurgedFoldSplitter:
     @staticmethod
     def purge_train_set(
         train_intervals: List[LabelInterval],
-        test_intervals: List[LabelInterval]
+        test_intervals: List[LabelInterval],
+        same_company_only: bool = False
     ) -> Tuple[List[LabelInterval], List[LabelInterval]]:
         """
         Purges any training interval that has an overlapping outcome interval
         with ANY test interval across the fold boundary.
+
+        Args:
+            train_intervals: Training label intervals.
+            test_intervals: Test label intervals.
+            same_company_only: If True, only purges when observations belong to the same company
+                               (for cross-sectional or panel splits).
+                               If False (default), enforces strict global temporal fold purging.
 
         Returns:
             (retained_train_intervals, purged_train_intervals)
@@ -59,6 +67,8 @@ class PurgedFoldSplitter:
 
         for train_item in train_intervals:
             for test_item in test_intervals:
+                if same_company_only and train_item.company_id != test_item.company_id:
+                    continue
                 if train_item.overlaps_with(test_item):
                     purged_ids.add(train_item.observation_id)
                     break # Purged, no need to check further test items
@@ -70,7 +80,8 @@ class PurgedFoldSplitter:
     @staticmethod
     def assert_zero_fold_overlap(
         train_intervals: List[LabelInterval],
-        test_intervals: List[LabelInterval]
+        test_intervals: List[LabelInterval],
+        same_company_only: bool = False
     ) -> bool:
         """
         Acceptance assertion for Invariant E:
@@ -79,10 +90,13 @@ class PurgedFoldSplitter:
         """
         for train_item in train_intervals:
             for test_item in test_intervals:
+                if same_company_only and train_item.company_id != test_item.company_id:
+                    continue
                 if train_item.overlaps_with(test_item):
                     raise AssertionError(
-                        f"Fold-boundary interval overlap detected!\n"
-                        f"Train Obs: {train_item.observation_id} [{train_item.label_start} -> {train_item.label_end}]\n"
-                        f"Test Obs:  {test_item.observation_id} [{test_item.label_start} -> {test_item.label_end}]"
+                        f"Invariant E Violation: Train observation {train_item.observation_id} "
+                        f"[{train_item.label_start} -> {train_item.label_end}) overlaps with "
+                        f"Test observation {test_item.observation_id} "
+                        f"[{test_item.label_start} -> {test_item.label_end})"
                     )
         return True

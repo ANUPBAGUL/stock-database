@@ -60,24 +60,34 @@ class FeatureEngine:
         financials = BitemporalQueryEngine.get_financials_as_of(
             db, company_id, as_of_datetime, period_type="QUARTERLY", limit=8
         )
-        recent_4_q = financials[:4] if financials else []
+        
+        # Detect reporting cadence: quarterly (~90 days, 4 periods/year) vs semi-annual (~180 days, 2 periods/year)
+        is_semi_annual = False
+        if len(financials) >= 2 and financials[0].period_end_date and financials[1].period_end_date:
+            try:
+                d0 = datetime.strptime(str(financials[0].period_end_date)[:10], "%Y-%m-%d")
+                d1 = datetime.strptime(str(financials[1].period_end_date)[:10], "%Y-%m-%d")
+                if abs((d0 - d1).days) > 130:
+                    is_semi_annual = True
+            except Exception:
+                pass
+        
+        periods_per_year = 2 if is_semi_annual else 4
+        recent_periods = financials[:periods_per_year] if financials else []
 
         if len(financials) >= 1:
             q0 = financials[0] # Most recent filing available at date T
-
-            # Extract TTM (Trailing 4 Quarters) aggregates for annualized metrics
-            recent_4_q = financials[:4]
             
-            # Consolidation scope consistency check — flag if TTM quarters are mixed
+            # Consolidation scope consistency check — flag if TTM periods are mixed
             consolidation_scopes = [
                 getattr(q, 'consolidation_scope', 'UNKNOWN') 
-                for q in recent_4_q
+                for q in recent_periods
             ]
             unique_scopes = set(consolidation_scopes)
             
             if len(unique_scopes) > 1:
                 logger.warning(
-                    f"[FeatureEngine] {company_id} TTM quarters have mixed consolidation_scope: "
+                    f"[FeatureEngine] {company_id} TTM periods have mixed consolidation_scope: "
                     f"{consolidation_scopes}. This may cause apples-to-oranges TTM aggregation. "
                     f"Consider filtering to single scope in bitemporal query."
                 )
@@ -85,21 +95,40 @@ class FeatureEngine:
             else:
                 features["ttm_consolidation_scope_flag"] = "CONSISTENT"
             
-            valid_revs = [q.revenue for q in recent_4_q if q.revenue is not None]
-            valid_ebits = [q.ebit for q in recent_4_q if q.ebit is not None]
-            valid_ebitdas = [q.ebitda for q in recent_4_q if q.ebitda is not None]
-            valid_deprs = [getattr(q, 'depreciation', None) for q in recent_4_q if getattr(q, 'depreciation', None) is not None]
-            valid_pats = [q.pat for q in recent_4_q if q.pat is not None]
-            valid_ocfs = [q.operating_cash_flow for q in recent_4_q if q.operating_cash_flow is not None]
-            valid_capexs = [q.capex for q in recent_4_q if q.capex is not None]
+            valid_revs = [q.revenue for q in recent_periods if q.revenue is not None]
+            valid_ebits = [q.ebit for q in recent_periods if q.ebit is not None]
+            valid_ebitdas = [q.ebitda for q in recent_periods if q.ebitda is not None]
+            valid_deprs = [getattr(q, 'depreciation', None) for q in recent_periods if getattr(q, 'depreciation', None) is not None]
+            valid_pats = [q.pat for q in recent_periods if q.pat is not None]
+            valid_ocfs = [q.operating_cash_flow for q in recent_periods if q.operating_cash_flow is not None]
+            valid_capexs = [q.capex for q in recent_periods if q.capex is not None]
 
-            ttm_rev = (sum(valid_revs) * (4.0 / len(valid_revs))) if valid_revs else 0.0
-            ttm_ebit = (sum(valid_ebits) * (4.0 / len(valid_ebits))) if valid_ebits else 0.0
-            ttm_ebitda = (sum(valid_ebitdas) * (4.0 / len(valid_ebitdas))) if valid_ebitdas else 0.0
-            ttm_depr = (sum(valid_deprs) * (4.0 / len(valid_deprs))) if valid_deprs else 0.0
-            ttm_pat = (sum(valid_pats) * (4.0 / len(valid_pats))) if valid_pats else 0.0
-            ttm_ocf = (sum(valid_ocfs) * (4.0 / len(valid_ocfs))) if valid_ocfs else 0.0
-            ttm_capex = (sum(valid_capexs) * (4.0 / len(valid_capexs))) if valid_capexs else 0.0
+            ann_scale = float(periods_per_year) / len(valid_revs) if valid_revs else 1.0
+            ttm_rev = (sum(valid_revs) * ann_scale) if valid_revs else 0.0
+            ttm_ebit = (sum(valid_ebits) * (float(periods_per_year) / len(valid_ebits))) if valid_ebits else 0.0
+            ttm_ebitda = (sum(valid_ebitdas) * (float(periods_per_year) / len(valid_ebitdas))) if valid_ebitdas else 0.0
+            ttm_depr = (sum(valid_deprs) * (float(periods_per_year) / len(valid_deprs))) if valid_deprs else 0.0
+            ttm_pat = (sum(valid_pats) * (float(periods_per_year) / len(valid_pats))) if valid_pats else 0.0
+
+            # Cash flows: If periodic filings lack OCF/CapEx (Clause 33 standard), query audited annual filings
+            annual_for_cf = BitemporalQueryEngine.get_financials_as_of(
+                db, company_id, as_of_datetime, period_type="ANNUAL", limit=2
+            )
+            if valid_ocfs:
+                ttm_ocf = sum(valid_ocfs) * (float(periods_per_year) / len(valid_ocfs))
+                ttm_capex = (sum(valid_capexs) * (float(periods_per_year) / len(valid_capexs))) if valid_capexs else 0.0
+                ttm_fcf = ttm_ocf - ttm_capex
+            elif annual_for_cf:
+                a_cf = annual_for_cf[0]
+                ttm_fcf = a_cf.free_cash_flow
+                ttm_ocf = a_cf.operating_cash_flow
+                ttm_capex = a_cf.capex if a_cf.capex is not None else ((ttm_ocf - ttm_fcf) if (ttm_ocf is not None and ttm_fcf is not None) else 0.0)
+                if ttm_fcf is None and ttm_ocf is not None:
+                    ttm_fcf = ttm_ocf - (ttm_capex or 0.0)
+            else:
+                ttm_ocf = None
+                ttm_capex = None
+                ttm_fcf = None
 
             features["latest_revenue"] = q0.revenue
             features["latest_pat"] = q0.pat
@@ -129,17 +158,17 @@ class FeatureEngine:
             # If Q0 is an interim quarter (Q1/Q3 limited review without BS), look back to the latest
             # available audited balance sheet (e.g. Annual March / Semi-Annual Sept) in financials.
             total_assets = q0.total_assets or 0.0
-            current_liab = getattr(q0, 'current_liabilities', None) or 0.0
+            current_liab = getattr(q0, 'current_liabilities', None)
             net_worth = q0.net_worth or 0.0
             total_debt = q0.total_debt or 0.0
             cash = q0.cash_and_equivalents or 0.0
 
             ce_q0 = None
             ce_q4 = None
-            if total_assets > 0 and total_assets > current_liab:
-                ce_q0 = total_assets - current_liab
-            elif (net_worth + total_debt) > 0:
+            if (net_worth + total_debt) > 0:
                 ce_q0 = net_worth + total_debt
+            elif current_liab is not None and total_assets > current_liab:
+                ce_q0 = total_assets - current_liab
 
             # If Q0 has no balance sheet (intermediate quarter), find the most recent audited BS filing
             roce_methodology = "PERIOD_AVERAGE_CE"
@@ -151,41 +180,46 @@ class FeatureEngine:
                 if annual_filings:
                     f0 = annual_filings[0]
                     ta = f0.total_assets or 0.0
-                    cl = getattr(f0, 'current_liabilities', None) or getattr(f0, 'total_liabilities', None) or 0.0
+                    cl = getattr(f0, 'current_liabilities', None)
                     nw = f0.net_worth or 0.0
                     td = f0.total_debt or 0.0
                     net_worth = nw
                     total_debt = td
                     cash = f0.cash_and_equivalents or 0.0
-                    if ta > 0 and ta > cl:
+                    if (nw + td) > 0:
+                        ce_q0 = nw + td
+                        roce_methodology = "LAST_AUDITED_BS"
+                    elif cl is not None and ta > cl:
                         ce_q0 = ta - cl
                         roce_methodology = "LAST_AUDITED_BS"
-                    elif (nw + td) > 0:
-                        ce_q0 = nw + td
+                    elif ta > 0:
+                        ce_q0 = ta
                         roce_methodology = "LAST_AUDITED_BS"
 
                     if len(annual_filings) >= 2:
                         f1 = annual_filings[1]
                         ta1 = f1.total_assets or 0.0
-                        cl1 = getattr(f1, 'current_liabilities', None) or getattr(f1, 'total_liabilities', None) or 0.0
+                        cl1 = getattr(f1, 'current_liabilities', None)
                         nw1 = f1.net_worth or 0.0
                         td1 = f1.total_debt or 0.0
-                        if ta1 > 0 and ta1 > cl1:
-                            ce_q4 = ta1 - cl1
-                        elif (nw1 + td1) > 0:
+                        if (nw1 + td1) > 0:
                             ce_q4 = nw1 + td1
+                        elif cl1 is not None and ta1 > cl1:
+                            ce_q4 = ta1 - cl1
+                        elif ta1 > 0:
+                            ce_q4 = ta1
                 else:
                     for f in financials[1:]:
                         ta = f.total_assets or 0.0
-                        cl = getattr(f, 'current_liabilities', None) or 0.0
+                        cl = getattr(f, 'current_liabilities', None)
                         nw = f.net_worth or 0.0
                         td = f.total_debt or 0.0
-                        if ta > 0 and ta > cl:
-                            ce_q0 = ta - cl
+                        if (nw + td) > 0:
+                            ce_q0 = nw + td
                             roce_methodology = "LAST_AUDITED_BS"
                             break
-                        elif (nw + td) > 0:
-                            ce_q0 = nw + td
+                        elif cl is not None and ta > cl:
+                            ce_q0 = ta - cl
                             roce_methodology = "LAST_AUDITED_BS"
                             break
 
@@ -240,6 +274,7 @@ class FeatureEngine:
             )
             net_debt = total_debt - cash
 
+            features["net_worth"] = net_worth
             if net_worth > 0:
                 features["gross_de_ratio"] = round(total_debt / net_worth, 2)
                 features["net_de_ratio"] = round(net_debt / net_worth, 2)
@@ -255,7 +290,10 @@ class FeatureEngine:
             features["net_cash_position"] = round(-net_debt, 2)  # positive = net cash, negative = net debt
 
             # ── Free Cash Flow TTM (OCF - CapEx) ──
-            if ttm_ocf is not None:
+            if ttm_fcf is not None:
+                features["ttm_fcf"] = round(ttm_fcf, 2)
+                features["ocf_to_pat"] = round(ttm_ocf / ttm_pat, 2) if (ttm_ocf is not None and ttm_pat and ttm_pat > 0) else None
+            elif ttm_ocf is not None:
                 features["ttm_fcf"] = round(ttm_ocf - (ttm_capex or 0.0), 2)
                 features["ocf_to_pat"] = round(ttm_ocf / ttm_pat, 2) if ttm_pat > 0 else None
             else:
@@ -266,17 +304,79 @@ class FeatureEngine:
             features["consolidation_scope"] = getattr(q0, 'consolidation_scope', 'CONSOLIDATED')
 
         else:
-            features.update({
-                "latest_revenue": None, "latest_pat": None, "ttm_revenue": None,
-                "ttm_pat": None, "ttm_ebit": None, "ttm_depreciation": None, "ebitda_margin": None,
-                "pat_margin": None, "revenue_yoy_growth_pct": None, "pat_yoy_growth_pct": None,
-                "gross_de_ratio": None, "net_de_ratio": None, "financial_de_ratio": None,
-                "debt_to_equity": None, "debt_to_ebitda": None, "net_cash_position": None,
-                "roce_pct": None, "roce_methodology": "UNAVAILABLE", "roce_quarantine_flag": True,
-                "roce_raw_inputs": None, "ttm_fcf": None, "ocf_to_pat": None,
-                "shares_outstanding": None, "consolidation_scope": None,
-                "ttm_consolidation_scope_flag": None
-            })
+            # Check if Annual filings exist when Quarterly filings are not yet populated
+            annual_fallback = BitemporalQueryEngine.get_financials_as_of(
+                db, company_id, as_of_datetime, period_type="ANNUAL", limit=4
+            )
+            if annual_fallback:
+                a0 = annual_fallback[0]
+                a1 = annual_fallback[1] if len(annual_fallback) >= 2 else None
+                a_rev = a0.revenue
+                a_ebit = a0.ebit
+                a_ebitda = a0.ebitda
+                a_pat = a0.pat
+                a_depr = getattr(a0, "depreciation", None)
+                a_cfo = a0.operating_cash_flow
+                a_capex = a0.capex
+                a_fcf = a0.free_cash_flow if a0.free_cash_flow is not None else ((a_cfo - (a_capex or 0.0)) if a_cfo is not None else None)
+
+                nw = a0.net_worth or 0.0
+                td = a0.total_debt or 0.0
+                ta = a0.total_assets or 0.0
+                cl = getattr(a0, "current_liabilities", None)
+                ce_a0 = (nw + td) if (nw + td) > 0 else ((ta - cl) if (cl is not None and ta > cl) else (ta if ta > 0 else None))
+                ce_a1 = None
+                if a1:
+                    nw1 = a1.net_worth or 0.0
+                    td1 = a1.total_debt or 0.0
+                    ta1 = a1.total_assets or 0.0
+                    cl1 = getattr(a1, "current_liabilities", None)
+                    ce_a1 = (nw1 + td1) if (nw1 + td1) > 0 else ((ta1 - cl1) if (cl1 is not None and ta1 > cl1) else (ta1 if ta1 > 0 else None))
+
+                ce_avg = ((ce_a0 + ce_a1) / 2.0) if (ce_a0 and ce_a1) else ce_a0
+                calc_roce = round((a_ebit / ce_avg) * 100.0, 2) if (a_ebit and ce_avg and ce_avg > 0) else None
+
+                rev_growth = round(((a0.revenue - a1.revenue) / abs(a1.revenue)) * 100.0, 2) if (a0.revenue and a1 and a1.revenue) else None
+                pat_growth = round(((a0.pat - a1.pat) / abs(a1.pat)) * 100.0, 2) if (a0.pat and a1 and a1.pat) else None
+
+                features.update({
+                    "latest_revenue": a_rev, "latest_pat": a_pat, "ttm_revenue": a_rev,
+                    "ttm_pat": a_pat, "ttm_ebit": a_ebit, "ttm_depreciation": a_depr,
+                    "ebitda_margin": round((a_ebitda / a_rev) * 100.0, 2) if (a_ebitda and a_rev and a_rev > 0) else None,
+                    "pat_margin": round((a_pat / a_rev) * 100.0, 2) if (a_pat and a_rev and a_rev > 0) else None,
+                    "revenue_yoy_growth_pct": rev_growth, "pat_yoy_growth_pct": pat_growth,
+                    "net_worth": nw,
+                    "gross_de_ratio": round(td / nw, 2) if (nw > 0) else None,
+                    "net_de_ratio": round((td - (a0.cash_and_equivalents or 0.0)) / nw, 2) if (nw > 0) else None,
+                    "financial_de_ratio": None,
+                    "debt_to_equity": round(td / nw, 2) if (nw > 0) else None,
+                    "debt_to_ebitda": round(td / a_ebitda, 2) if (a_ebitda and a_ebitda > 0) else None,
+                    "net_cash_position": round((a0.cash_and_equivalents or 0.0) - td, 2),
+                    "roce_pct": calc_roce,
+                    "roce_methodology": "ANNUAL_AUDITED_BS",
+                    "roce_quarantine_flag": (calc_roce is None),
+                    "roce_raw_inputs": {"ttm_ebit": a_ebit, "cap_employed_avg": ce_avg, "methodology": "ANNUAL_AUDITED_BS"},
+                    "ttm_fcf": round(a_fcf, 2) if a_fcf is not None else None,
+                    "fcf_yield_pct": None,
+                    "ttm_fcf_yield_pct": None,
+                    "ocf_to_pat": round(a_cfo / a_pat, 2) if (a_cfo and a_pat and a_pat > 0) else None,
+                    "shares_outstanding": a0.shares_outstanding,
+                    "consolidation_scope": getattr(a0, "consolidation_scope", "CONSOLIDATED"),
+                    "ttm_consolidation_scope_flag": "CONSISTENT"
+                })
+            else:
+                features.update({
+                    "latest_revenue": None, "latest_pat": None, "ttm_revenue": None,
+                    "ttm_pat": None, "ttm_ebit": None, "ttm_depreciation": None, "ebitda_margin": None,
+                    "pat_margin": None, "revenue_yoy_growth_pct": None, "pat_yoy_growth_pct": None,
+                    "gross_de_ratio": None, "net_de_ratio": None, "financial_de_ratio": None,
+                    "net_worth": None,
+                    "debt_to_equity": None, "debt_to_ebitda": None, "net_cash_position": None,
+                    "roce_pct": None, "roce_methodology": "UNAVAILABLE", "roce_quarantine_flag": True,
+                    "roce_raw_inputs": None, "ttm_fcf": None, "fcf_yield_pct": None, "ttm_fcf_yield_pct": None, "ocf_to_pat": None,
+                    "shares_outstanding": None, "consolidation_scope": None,
+                    "ttm_consolidation_scope_flag": None
+                })
 
         # ──────────────────────────────────────────────────────────────
         # 2. Technical Features (Split-adjusted prices strictly <= as_of_date)
@@ -295,8 +395,27 @@ class FeatureEngine:
             current_close = closes[-1]
             features["close_price"] = current_close
 
-            # Valuation metrics using real price and shares
+            # TTM EPS from trailing periods (semi-annual or quarterly), or latest annual statement fallback
+            valid_q_eps = [q.eps for q in recent_periods if q.eps is not None]
+            if valid_q_eps:
+                ttm_eps = sum(valid_q_eps) * (float(periods_per_year) / len(valid_q_eps))
+            else:
+                annual_filings_for_eps = BitemporalQueryEngine.get_financials_as_of(
+                    db, company_id, as_of_datetime, period_type="ANNUAL", limit=1
+                )
+                ttm_eps = annual_filings_for_eps[0].eps if (annual_filings_for_eps and annual_filings_for_eps[0].eps is not None) else None
+
+            features["ttm_eps"] = round(ttm_eps, 2) if ttm_eps is not None else None
+
+            # Derive Shares Outstanding:
+            # 1. Institutional accounting identity: Shares = (TTM PAT in INR) / (TTM EPS in INR)
+            ttm_pat_val = features.get("ttm_pat")
             shares = features.get("shares_outstanding")
+            if (not shares or shares <= 0) and ttm_eps and ttm_eps > 0 and ttm_pat_val and ttm_pat_val > 0:
+                shares = round((ttm_pat_val * 10_000_000.0) / ttm_eps)
+                features["shares_outstanding"] = shares
+
+            # 2. Balance Sheet Equity Capital / Face Value fallback
             if not shares or shares <= 0:
                 annual_bs = BitemporalQueryEngine.get_financials_as_of(
                     db, company_id, as_of_datetime, period_type="ANNUAL", limit=1
@@ -310,34 +429,41 @@ class FeatureEngine:
                         shares = (eq_cap * 10_000_000.0) / fv
                         features["shares_outstanding"] = shares
 
-            # TTM EPS from trailing 4 quarters
-            ttm_eps = sum(q.eps for q in recent_4_q if q.eps is not None) if recent_4_q else None
+            # Direct institutional P/E derivation: Price / TTM EPS
+            if current_close and ttm_eps and ttm_eps > 0:
+                features["pe_ratio"] = round(current_close / ttm_eps, 2)
+            elif shares and shares > 0 and current_close and ttm_pat_val and ttm_pat_val > 0:
+                mcap_cr = (current_close * shares) / 10_000_000.0
+                features["pe_ratio"] = round(mcap_cr / ttm_pat_val, 2)
+            else:
+                features["pe_ratio"] = None
 
             if shares and shares > 0 and current_close:
                 mcap_cr = (current_close * shares) / 10_000_000.0
                 features["market_cap_crores"] = round(mcap_cr, 2)
+                features["market_cap_cr"] = round(mcap_cr, 2)
 
-                ttm_pat = features.get("ttm_pat")
-                if ttm_pat and ttm_pat > 0:
-                    features["pe_ratio"] = round(mcap_cr / ttm_pat, 2)
-                elif ttm_eps and ttm_eps > 0:
-                    features["pe_ratio"] = round(current_close / ttm_eps, 2)
-                else:
-                    features["pe_ratio"] = None
-
-                net_worth_val = net_worth if net_worth > 0 else (financials[0].net_worth if financials and financials[0].net_worth else None)
+                net_worth_val = features.get("net_worth")
                 if net_worth_val and net_worth_val > 0:
                     features["pb_ratio"] = round(mcap_cr / net_worth_val, 2)
                 else:
                     features["pb_ratio"] = None
-            elif current_close and ttm_eps and ttm_eps > 0:
-                features["pe_ratio"] = round(current_close / ttm_eps, 2)
-                features["market_cap_crores"] = None
-                features["pb_ratio"] = None
+
+                # ── Free Cash Flow Yield (% of Market Cap) ──
+                ttm_fcf_val = features.get("ttm_fcf")
+                if ttm_fcf_val is not None and mcap_cr > 0:
+                    fcf_y = round((ttm_fcf_val / mcap_cr) * 100.0, 2)
+                    features["fcf_yield_pct"] = fcf_y
+                    features["ttm_fcf_yield_pct"] = fcf_y
+                else:
+                    features["fcf_yield_pct"] = None
+                    features["ttm_fcf_yield_pct"] = None
             else:
                 features["market_cap_crores"] = None
-                features["pe_ratio"] = None
+                features["market_cap_cr"] = None
                 features["pb_ratio"] = None
+                features["fcf_yield_pct"] = None
+                features["ttm_fcf_yield_pct"] = None
 
             # Moving Averages
             sma_20 = sum(closes[-20:]) / 20.0
@@ -376,7 +502,8 @@ class FeatureEngine:
 
         else:
             features.update({
-                "close_price": None, "market_cap_crores": None, "pe_ratio": None, "pb_ratio": None,
+                "close_price": None, "market_cap_crores": None, "market_cap_cr": None, "pe_ratio": None, "pb_ratio": None,
+                "fcf_yield_pct": None, "ttm_fcf_yield_pct": None,
                 "sma_20": None, "sma_50": None, "sma_200": None,
                 "dist_from_sma20_pct": None, "dist_from_sma50_pct": None,
                 "dist_from_sma200_pct": None, "rsi_14": None, "atr_14": None, "atr_pct": None,

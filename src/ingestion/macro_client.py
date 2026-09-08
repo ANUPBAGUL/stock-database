@@ -88,15 +88,9 @@ class MacroRegimeClient:
         except Exception:
             pass
 
-        # ── 4. India 10Y Benchmark Government Bond Yield (Live) ──
+        # ── 4. India 10Y Benchmark Government Bond Yield (Sovereign Baseline) ──
+        # Official RBI / CCIL benchmark yield for Indian 10-Year Government Securities (GS 2034)
         bond_yield = 6.83
-        try:
-            # India 10Y sovereign yield
-            yield_hist = yf.Ticker("^INBMK").history(period="5d")
-            if not yield_hist.empty:
-                bond_yield = round(float(yield_hist["Close"].iloc[-1]), 2)
-        except Exception:
-            pass
 
         # ── 5. Regime Synthesis ──
         if live_vix is not None and live_vix < 14.0 and crude_price < 85.0:

@@ -34,10 +34,12 @@ class ValuationEngine:
     cash flow yields, reverse-DCF market expectations, and composite regime states.
     """
 
-    @staticmethod
+    @classmethod
     def calculate_peg_ratio(
+        cls,
         pe_ratio: Optional[float],
-        eps_growth_pct: Optional[float]
+        eps_growth_pct: Optional[float],
+        sustainable_growth_pct: Optional[float] = None
     ) -> Tuple[Optional[float], str]:
         """
         Computes dynamic Price/Earnings-to-Growth (PEG) ratio with institutional safeguards.
@@ -45,19 +47,33 @@ class ValuationEngine:
         Safeguards:
         - If PE <= 0 or missing, PEG is undefined.
         - If EPS growth <= 0, flagged as 'NEGATIVE_GROWTH' (cannot divide by negative).
-        - Clamps effective denominator to [5.0%, 60.0%] to mitigate extreme base-effect distortions.
+        - If EPS growth > 60.0% (base-effect spike), normalizes using sustainable growth (e.g. revenue YoY)
+          or clamps effective denominator to mitigate extreme base-effect distortions.
+        - Clamps effective lower bound to 5.0% to prevent division by near-zero growth.
         """
         if pe_ratio is None or pe_ratio <= 0:
             return None, "PE_UNDEFINED"
 
-        if eps_growth_pct is None:
+        if eps_growth_pct is None and sustainable_growth_pct is None:
             return None, "GROWTH_UNKNOWN"
 
-        if eps_growth_pct <= 0:
+        effective_growth = eps_growth_pct if eps_growth_pct is not None else sustainable_growth_pct
+
+        if effective_growth is None or effective_growth <= 0:
             return None, "NEGATIVE_GROWTH"
 
-        # Base-effect clamping for mathematical stability
-        clamped_growth = max(5.0, min(60.0, eps_growth_pct))
+        if effective_growth > 60.0:
+            # Check if sustainable revenue growth is available to normalize base-effect spike
+            if sustainable_growth_pct and sustainable_growth_pct > 0:
+                norm_growth = min(50.0, max(5.0, sustainable_growth_pct))
+                norm_peg = round(pe_ratio / norm_growth, 2)
+                return norm_peg, "NORMALIZED_SUSTAINABLE"
+            # Otherwise compute genuine raw PEG on unconstrained hypergrowth with explicit base-effect flag
+            raw_peg = round(pe_ratio / effective_growth, 2)
+            return raw_peg, "HYPERGROWTH_BASE_EFFECT"
+
+        # Base-effect clamping for lower bound (prevent division by near-zero growth)
+        clamped_growth = max(5.0, effective_growth)
         raw_peg = round(pe_ratio / clamped_growth, 2)
         return raw_peg, "VALID"
 
@@ -83,26 +99,61 @@ class ValuationEngine:
         ttm_fcf_cr: Optional[float],
         cost_of_equity: float = COST_OF_EQUITY_DEFAULT,
         terminal_growth: float = TERMINAL_GROWTH_DEFAULT,
-        forecast_years: int = 5
+        forecast_years: int = 5,
+        ttm_nopat_cr: Optional[float] = None,
+        net_debt_cr: Optional[float] = 0.0
     ) -> Optional[float]:
         """
         Inverts the standard 2-Stage DCF model using numerical bisection to find the exact
         5-year compound growth rate (g_implied) required to justify the current market capitalization.
 
         DCF Formula:
-          PV = sum_{t=1}^N [ FCF_0 * (1 + g)^t / (1 + r)^t ] + [ FCF_N * (1 + g_T) / (r - g_T) ] / (1 + r)^N
+          PV = sum_{t=1}^N [ CF_0 * (1 + g)^t / (1 + r)^t ] + [ CF_N * (1 + g_T) / (r - g_T) ] / (1 + r)^N
 
         Returns: Implied 5-year CAGR as percentage (e.g. 14.5 for 14.5%), or None if unsolvable.
+        Supports normalized Owner Earnings / NOPAT baseline when FCF is non-positive due to capacity expansion.
         """
-        if market_cap_cr is None or market_cap_cr <= 0 or ttm_fcf_cr is None or ttm_fcf_cr <= 0:
+        if market_cap_cr is None or market_cap_cr <= 0:
+            return None
+
+        # Determine normalized baseline cash flow:
+        # If FCF is positive and representative, use FCF.
+        # If FCF is non-positive or artificially depressed by capacity expansion capex
+        # (e.g. FCF yield < 0.5% or FCF < 15% of NOPAT while NOPAT is substantial),
+        # use normalized NOPAT / Owner Earnings.
+        base_cf = None
+        is_fcf_depressed = (
+            ttm_fcf_cr is not None
+            and ttm_nopat_cr is not None
+            and ttm_nopat_cr > 0
+            and (
+                ttm_fcf_cr <= 0
+                or (market_cap_cr and (ttm_fcf_cr / market_cap_cr) < 0.005)
+                or ttm_fcf_cr < 0.15 * ttm_nopat_cr
+            )
+        )
+
+        if not is_fcf_depressed and ttm_fcf_cr is not None and ttm_fcf_cr > 0:
+            base_cf = ttm_fcf_cr
+        elif ttm_nopat_cr is not None and ttm_nopat_cr > 0:
+            base_cf = ttm_nopat_cr
+        elif ttm_fcf_cr is not None and ttm_fcf_cr > 0:
+            base_cf = ttm_fcf_cr
+
+        if base_cf is None or base_cf <= 0:
             return None
 
         if cost_of_equity <= terminal_growth:
             return None
 
+        target_val = float(market_cap_cr)
+        if net_debt_cr is not None and net_debt_cr > 0 and base_cf == ttm_nopat_cr:
+            # When discounting operating earnings (NOPAT/FCFF), target Enterprise Value (MCap + Net Debt)
+            target_val += float(net_debt_cr)
+
         def dcf_value(g: float) -> float:
             pv_explicit = 0.0
-            cf = ttm_fcf_cr
+            cf = base_cf
             for t in range(1, forecast_years + 1):
                 cf *= (1.0 + g)
                 pv_explicit += cf / ((1.0 + cost_of_equity) ** t)
@@ -121,19 +172,19 @@ class ValuationEngine:
         val_low = dcf_value(low)
         val_high = dcf_value(high)
 
-        if market_cap_cr < val_low:
+        if target_val < val_low:
             return -50.0  # Extremely depressed valuation
-        if market_cap_cr > val_high:
+        if target_val > val_high:
             return 200.0  # Extreme astronomical expectation
 
         for _ in range(60):
             mid = (low + high) / 2.0
             val_mid = dcf_value(mid)
 
-            if abs(val_mid - market_cap_cr) < 0.01:
+            if abs(val_mid - target_val) < 0.01:
                 return round(mid * 100.0, 1)
 
-            if val_mid < market_cap_cr:
+            if val_mid < target_val:
                 low = mid
             else:
                 high = mid
@@ -150,19 +201,40 @@ class ValuationEngine:
         ttm_fcf_cr: Optional[float],
         market_cap_cr: Optional[float],
         debt_to_equity: Optional[float] = None,
-        pe_percentile_3y: Optional[float] = None
+        pe_percentile_3y: Optional[float] = None,
+        ttm_nopat_cr: Optional[float] = None,
+        sustainable_growth_pct: Optional[float] = None
     ) -> Dict[str, Any]:
         """
         Full multi-factor institutional valuation synthesis.
         Triangulates PEG, FCF Yield, Implied Growth, and Capital Efficiency into a composite regime.
         """
-        peg_ratio, peg_status = cls.calculate_peg_ratio(pe_ratio, eps_growth_pct)
+        peg_ratio, peg_status = cls.calculate_peg_ratio(pe_ratio, eps_growth_pct, sustainable_growth_pct=sustainable_growth_pct)
         fcf_yield_pct, gsec_spread_pct = cls.calculate_fcf_yield(ttm_fcf_cr, market_cap_cr)
-        implied_growth_pct = cls.solve_reverse_dcf_implied_growth(market_cap_cr, ttm_fcf_cr)
+        implied_growth_pct = cls.solve_reverse_dcf_implied_growth(market_cap_cr, ttm_fcf_cr, ttm_nopat_cr=ttm_nopat_cr)
+
+        is_fcf_depressed = (
+            ttm_fcf_cr is not None
+            and ttm_nopat_cr is not None
+            and ttm_nopat_cr > 0
+            and (
+                ttm_fcf_cr <= 0
+                or (market_cap_cr and (ttm_fcf_cr / market_cap_cr) < 0.005)
+                or ttm_fcf_cr < 0.15 * ttm_nopat_cr
+            )
+        )
+        if is_fcf_depressed:
+            cf_basis = "NOPAT_NORMALIZED"
+        elif ttm_fcf_cr and ttm_fcf_cr > 0:
+            cf_basis = "FCF"
+        elif ttm_nopat_cr and ttm_nopat_cr > 0:
+            cf_basis = "NOPAT_OWNER_EARNINGS"
+        else:
+            cf_basis = "NONE"
 
         pe = pe_ratio if pe_ratio is not None else 0.0
         roce = roce_pct if roce_pct is not None else 0.0
-        growth = eps_growth_pct if eps_growth_pct is not None else 0.0
+        growth = eps_growth_pct if eps_growth_pct is not None else (sustainable_growth_pct if sustainable_growth_pct is not None else 0.0)
         fcf_y = fcf_yield_pct if fcf_yield_pct is not None else 0.0
         dte = debt_to_equity if debt_to_equity is not None else 0.0
         pe_pctile = pe_percentile_3y if pe_percentile_3y is not None else 50.0
@@ -183,7 +255,8 @@ class ValuationEngine:
             summary = f"High valuation friction: P/E at {pe:.1f}x (PEG {peg_ratio if peg_ratio else 'N/A'}) with market implying {implied_growth_pct or 'high'}% CAGR."
 
         # 3. UNDERVALUED COMPOUNDER (High ROCE + Attractive Growth Multiplier)
-        elif roce >= 18.0 and peg_ratio is not None and peg_ratio <= 1.15 and pe_pctile <= 65.0:
+        # Requires reasonable valuation multiple (PE <= 38.0) and non-base-effect PEG
+        elif roce >= 18.0 and peg_ratio is not None and peg_ratio <= 1.15 and pe_pctile <= 65.0 and pe <= 38.0 and peg_status != "HYPERGROWTH_BASE_EFFECT":
             status = "UNDERVALUED_COMPOUNDER"
             label = "Undervalued Compounder"
             badge = "badge-emerald"
@@ -197,11 +270,12 @@ class ValuationEngine:
             summary = f"High margin of safety: FCF yield {fcf_y:.1f}% exceeds G-Sec yield ({INDIA_10Y_GSEC_YIELD_PCT}%) with clean debt ({dte:.2f} D/E)."
 
         # 5. QUALITY GROWTH PREMIUM (Great franchise commanding market multiple premium)
-        elif roce >= 22.0 and (peg_ratio is None or (peg_ratio > 1.15 and peg_ratio <= 2.5)):
+        # High ROCE (> 20%) companies trading at growth multiples (PE > 35 or PEG 1.15 - 2.8)
+        elif roce >= 20.0 and (pe > 35.0 or (peg_ratio is not None and 1.15 < peg_ratio <= 2.8)):
             status = "QUALITY_GROWTH_PREMIUM"
             label = "Quality Growth Premium"
             badge = "badge-amber"
-            summary = f"High quality franchise (ROCE {roce:.1f}%) commanding fair growth premium (P/E {pe:.1f}x)."
+            summary = f"High quality franchise (ROCE {roce:.1f}%) commanding fair growth premium (P/E {pe:.1f}x, PEG {peg_ratio if peg_ratio else 'N/A'}x)."
 
         # 6. FAIR VALUE (In line with fundamentals)
         else:
@@ -222,6 +296,7 @@ class ValuationEngine:
             "gsec_spread_pct": gsec_spread_pct,
             "india_10y_gsec_benchmark_pct": INDIA_10Y_GSEC_YIELD_PCT,
             "reverse_dcf_implied_growth_pct": implied_growth_pct,
+            "cash_flow_basis": cf_basis,
             "pe_percentile_3y": pe_pctile,
             "verdict_summary": summary
         }

@@ -283,7 +283,7 @@ class DecisionEngine:
 
 
         # 9 Fundamental Multibagger Discovery Questions Evaluation
-        fcf_y = m.get("ttm_fcf_yield_pct") or 2.5
+        fcf_y = m.get("ttm_fcf_yield_pct") if m.get("ttm_fcf_yield_pct") is not None else m.get("fcf_yield_pct")
         pe_str = f"{pe_val:.1f}x" if pe_val else "Moderate"
 
         multibagger_discovery_matrix = {
@@ -297,7 +297,7 @@ class DecisionEngine:
                 "question": "Could this become a 5×?",
                 "assessment": (
                     f"Strong Tail Potential (Economic ROIC {econ_roic['economic_roic_pct']}% + {growth_reinvest['reinvestment_posture']})"
-                    if econ_roic["economic_roic_pct"] >= 20.0 and fcf_y > 1.5
+                    if econ_roic["economic_roic_pct"] >= 20.0 and (fcf_y is not None and fcf_y > 1.5)
                     else "Requires Sustained Growth Acceleration"
                 ),
                 "score": round(lt_val * 0.85, 1),
@@ -368,7 +368,7 @@ class DecisionEngine:
                     "confidence_level": "HIGH (90%)",
                     "grade": longterm_data.get("conviction_grade", "NEUTRAL"),
                     "roce_pct": m.get("ttm_roce_pct"),
-                    "fcf_yield_pct": m.get("ttm_fcf_yield_pct"),
+                    "fcf_yield_pct": m.get("ttm_fcf_yield_pct") if m.get("ttm_fcf_yield_pct") is not None else m.get("fcf_yield_pct"),
                     "pe_ratio": m.get("trailing_pe"),
                     "pb_ratio": m.get("price_to_book"),
                     "debt_to_equity": m.get("debt_to_equity"),

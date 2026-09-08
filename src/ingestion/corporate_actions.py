@@ -85,8 +85,18 @@ class CorporateActionEngine:
         before inserting. If found, updates description and factors only.
         This prevents double-compounding of cum_factor when the same backfill runs twice.
         """
-        price_factor = old_shares / new_shares if new_shares > 0 else 1.0
-        share_factor = new_shares / old_shares if old_shares > 0 else 1.0
+        # Factor determination:
+        # For splits: old_shares of FV_old become new_shares of FV_new (e.g., 1 -> 5, factor = 1/5 = 0.2)
+        # For bonuses: In Indian disclosures, "Bonus A:B" means A bonus shares for B held.
+        # If new_shares <= old_shares for BONUS (e.g. 1:1, 1:2), it represents bonus_shares per old_shares held,
+        # so total post-bonus shares = old_shares + new_shares.
+        if action_type == "BONUS" and new_shares <= old_shares and new_shares > 0:
+            total_post_shares = old_shares + new_shares
+            price_factor = old_shares / total_post_shares
+            share_factor = total_post_shares / old_shares
+        else:
+            price_factor = old_shares / new_shares if new_shares > 0 else 1.0
+            share_factor = new_shares / old_shares if old_shares > 0 else 1.0
 
         # Upsert guard: never insert a duplicate (company_id, ex_date, action_type)
         existing = db.query(CorporateAction).filter(

@@ -127,12 +127,12 @@ where $R = \max(0, 100 - \sum s_i)$.
 
 ---
 
-## 4. Test Suite & Validation Matrix (118/118 Tests Passed)
+## 4. Test Suite & Validation Matrix (131/131 Tests Passed)
 
 ```bash
 # Run the complete master test suite
 python -m pytest -v
-# Result: 118 passed in 50.07s (100% Pass Rate)
+# Result: 131 passed in 27.75s (100% Pass Rate)
 
 # Run the dedicated institutional acceptance suite
 python -m pytest tests/institutional/ -v
@@ -141,6 +141,10 @@ python -m pytest tests/institutional/ -v
 # Run the 5-Pillar Multibagger Discovery suite
 python -m pytest tests/test_5pillar_multibagger_suite.py -v
 # Result: 9 passed in 0.39s
+
+# Run the Quantamental Screener service suite
+python -m pytest tests/test_screener_service.py -v
+# Result: 3 passed in 1.38s
 
 # Run the quantitative valuation engine suite
 python -m pytest tests/test_valuation_engine.py -v
@@ -159,6 +163,7 @@ python -m pytest tests/test_valuation_engine.py -v
 * **Layer J:** End-to-End Synthetic 15-Company Golden Cohort Pipeline
 * **Layer K:** 3-Pillar Institutional Valuation Engine (PEG, FCF Yield, Reverse-DCF, 6 Regimes)
 * **Layer L:** 5-Pillar Multibagger Discovery & Trajectory Inflection Architecture (Nonlinear Inflection, Capacity TAM, Debtor Days Forensic Sentinel, Mauboussin Expectations Gap, Minervini Stage 2 / Mansfield RS)
+* **Layer M:** Decoupled 4-Vector Quantamental Screener (Permissive Negative Sieve, Continuous Factor Ranking, ISIN Security Master, Strategic Watchlist & Multi-Horizon Routing)
 
 ---
 
@@ -171,14 +176,33 @@ python -m pytest tests/test_valuation_engine.py -v
 | `python scripts/audit_longitudinal_dataset.py` | Audits the 10 empirical health metrics ($N_{\text{effective}}$, maturity, survivorship, missingness) |
 | `python scripts/scale_historical_universe_backfill.py` | Seeds survivorship failure cohorts & backfills broad multi-sector PIT trajectories |
 | `python scripts/verify_watchlist_state.py` | Real-time live ingestion and parameter verification for all active watchlist stocks |
+| `python scripts/launch_app.py` | Starts HTTP server on port 8060 with Upstox OAuth daemon, Watchlist, and 4-Vector Screener |
 
 ---
 
-## 6. Audit & Validation Documentation
+## 6. Decoupled 4-Vector Quantamental Screener & REST API
+
+The interactive hub on `http://localhost:8060` includes **Tab 4: ⚡ Instant Quantamental Screener** providing sub-45ms discovery across 5,000+ Indian equities:
+
+### The 4-Vector Institutional Matrix:
+1. 🏛️ **Business Potential Score (0–100):** Fundamental compounding moat, Greenwald CapEx runway, and operating leverage ($P1 + P2 + P3$).
+2. ⚖️ **Expectations Asymmetry Gap (%):** Reverse DCF market-implied growth vs. sustainable compounding rate ($P4$).
+3. 📊 **Tape Confirmation Score (0–100):** Mansfield Relative Strength, Stage 2 Trend, and accumulation volume ($P5$).
+4. 🎯 **Entry Setup Quality (0–100):** Volatility Contraction Pattern (VCP) tightness and ATR-defined Risk/Reward ratio ($\ge 1:2.33$).
+
+### REST API Endpoints:
+* `POST /api/screener/run` — On-demand custom screen with dynamic funnel attrition.
+* `GET /api/screener/presets` — Instant institutional preset queries (`MULTIBAGGER_INFLECTION_PRESET`, `SWING_VCP_BREAKOUT_PRESET`, `MICROCAP_COMPOUNDER_PRESET`, `INTRADAY_MOMENTUM_SCALP_PRESET`).
+* `GET /api/screener/feeds?preset=...` — Returns multi-horizon feeds (*Top Candidates*, *Strategic Watchlist*, *Swing Radar*, *Intraday Scalp*).
+
+---
+
+## 7. Audit & Validation Documentation
 
 * **Validation Report:** [`P0_INSTITUTIONAL_VALIDATION_REPORT.md`](file:///d:/Projects/Stock_Watchlist_Hub/P0_INSTITUTIONAL_VALIDATION_REPORT.md)
 * **Test Architecture & Dependency Map:** [`TEST_ARCHITECTURE.md`](file:///d:/Projects/Stock_Watchlist_Hub/TEST_ARCHITECTURE.md)
 * **Machine-Readable Audit JSON:** [`institutional_validation_report.json`](file:///d:/Projects/Stock_Watchlist_Hub/institutional_validation_report.json)
 * **Investment Thesis:** [`STOCK_ANALYSIS_THESIS.md`](file:///d:/Projects/Stock_Watchlist_Hub/STOCK_ANALYSIS_THESIS.md)
-* **5-Pillar Multibagger Walkthrough:** [`walkthrough.md`](file:///C:/Users/bagul/.gemini/antigravity-ide/brain/77ee90f0-ce33-4279-a24e-7c4a77e4ee87/walkthrough.md)
+* **Screener & 4-Vector Walkthrough:** [`walkthrough.md`](file:///C:/Users/bagul/.gemini/antigravity-ide/brain/272c2b4a-dcf7-4001-ba0a-56d3f71e5a97/walkthrough.md)
+
 

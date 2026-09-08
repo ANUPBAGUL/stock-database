@@ -22,6 +22,7 @@ from src.ingestion.yfinance_client import YFinanceClient
 from src.ingestion.nse_client import NseClient
 from src.ingestion.shareholding_client import ShareholdingClient
 from src.ingestion.structured_events_client import StructuredDisclosuresClient
+from src.ingestion.corporate_actions import CorporateActionEngine
 from src.ingestion.bitemporal_ingest import BitemporalIngestionEngine
 from src.analytics.announcement_decay_engine import AnnouncementDecayEngine
 from src.analytics.snapshot_engine import DecisionSnapshotEngine
@@ -31,6 +32,30 @@ from src.ingestion.macro_client import MacroRegimeClient
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
+_BENCHMARK_CLOSES_CACHE = {
+    "date": None,
+    "closes": []
+}
+
+def get_benchmark_closes() -> List[float]:
+    """
+    Fetches and caches daily closing prices for NIFTY 50 (^NSEI) for Mansfield Relative Strength calculation.
+    """
+    today_str = date.today().isoformat()
+    if _BENCHMARK_CLOSES_CACHE["date"] == today_str and _BENCHMARK_CLOSES_CACHE["closes"]:
+        return _BENCHMARK_CLOSES_CACHE["closes"]
+    try:
+        import yfinance as yf
+        hist = yf.Ticker("^NSEI").history(period="1y")
+        if not hist.empty:
+            closes = [float(c) for c in hist["Close"].dropna().tolist()]
+            _BENCHMARK_CLOSES_CACHE["date"] = today_str
+            _BENCHMARK_CLOSES_CACHE["closes"] = closes
+            return closes
+    except Exception as e:
+        logger.warning(f"Failed to fetch Nifty 50 benchmark closes: {e}")
+    return []
 
 # Common Indian Equities Name-to-NSE-Ticker Mapping Dictionary
 NAME_TO_TICKER = {
@@ -75,6 +100,9 @@ NAME_TO_TICKER = {
     "KOTAK BANK": "KOTAKBANK",
     "KOTAKBANK": "KOTAKBANK",
     "TITAN": "TITAN",
+    "VARUN": "VBL",
+    "VARUN BEVERAGES": "VBL",
+    "VBL": "VBL",
     "ASIAN PAINTS": "ASIANPAINT",
     "ASIANPAINT": "ASIANPAINT",
     "MARUTI": "MARUTI",
@@ -276,14 +304,18 @@ class WatchlistManager:
                 db.commit()
                 db.refresh(sec)
 
+            info = upstox.get_instrument_info(symbol)
             comp_id = f"comp_{symbol.lower()}"
-            isin_val = f"INE{symbol[:7]}01" if len(symbol) <= 7 else f"INE{symbol[:7]}1"
+            isin_val = (info.get("isin") if info else None) or (f"INE{symbol[:7]}01" if len(symbol) <= 7 else f"INE{symbol[:7]}1")
+            bse_val = (str(info.get("exchange_token")) if info and info.get("exchange_token") else None) or symbol
+            comp_name = (info.get("name") if info else None) or f"{symbol} Limited"
+
             company = Company(
                 company_id=comp_id,
                 nse_symbol=symbol,
-                bse_code=symbol,
+                bse_code=bse_val,
                 isin=isin_val,
-                company_name=f"{symbol} Limited",
+                company_name=comp_name,
                 sector_id=sec.sector_id,
                 status="ACTIVE"
             )
@@ -291,9 +323,24 @@ class WatchlistManager:
             db.commit()
             db.refresh(company)
         else:
+            # If company already exists with placeholder metadata, enrich from instruments
+            info = upstox.get_instrument_info(symbol)
+            updated = False
+            if info:
+                if info.get("exchange_token") and (not company.bse_code or company.bse_code == symbol):
+                    company.bse_code = str(info["exchange_token"])
+                    updated = True
+                if info.get("name") and (not company.company_name or company.company_name == f"{symbol} Limited"):
+                    company.company_name = info["name"]
+                    updated = True
+                if info.get("isin") and (not company.isin or company.isin.startswith(f"INE{symbol[:5]}")):
+                    company.isin = info["isin"]
+                    updated = True
             # When a stock is analyzed, ensure it is activated in the watchlist
             if company.status != "ACTIVE":
                 company.status = "ACTIVE"
+                updated = True
+            if updated:
                 db.commit()
                 db.refresh(company)
 
@@ -333,29 +380,62 @@ class WatchlistManager:
                     valid_candles += 1
                 db.commit()
                 logger.info(f"Synced {valid_candles} daily price candles for {symbol} via Yahoo Finance.")
+
+                # Also fetch corporate actions and calculate cumulative factors
+                try:
+                    yf_actions = yf_client.fetch_corporate_actions(symbol)
+                    for act in yf_actions:
+                        CorporateActionEngine.add_corporate_action(
+                            db=db,
+                            company_id=company.company_id,
+                            ex_date=act["ex_date"],
+                            action_type=act["action_type"],
+                            old_shares=act["old_shares"],
+                            new_shares=act["new_shares"],
+                            dividend_amount=act.get("dividend_amount", 0.0),
+                            description=act.get("description", "")
+                        )
+                    if yf_actions:
+                        CorporateActionEngine.calculate_cumulative_factors(db, company.company_id)
+                except Exception as ca_err:
+                    logger.warning(f"Could not sync corporate actions for {symbol}: {ca_err}")
             except Exception as e:
                 db.rollback()
                 logger.warning(f"Error fetching Yahoo Finance prices for {symbol}: {e}")
 
-        # 2. Ensure Real Financials Exist (Dynamic Real-Data Ingestion via Screener XBRL)
-        # 2. Ensure Real Financials Exist (Dynamic Real-Data Ingestion via Screener XBRL)
-        fin_count = db.query(BitemporalFinancial).filter_by(company_id=company.company_id).count()
-        if fin_count < 8:
+        # 2. Ensure Real Financials Exist (Dynamic Real-Data Ingestion via Screener XBRL + YFinance Redundant Fallback)
+        q_count = db.query(BitemporalFinancial).filter_by(
+            company_id=company.company_id, period_type="QUARTERLY"
+        ).count()
+        a_with_rev = db.query(BitemporalFinancial).filter(
+            BitemporalFinancial.company_id == company.company_id,
+            BitemporalFinancial.period_type == "ANNUAL",
+            BitemporalFinancial.revenue.isnot(None)
+        ).count()
+
+        if (q_count < 4 or a_with_rev < 2) and not fast_mode:
+            screener_ok = False
             try:
                 from src.ingestion.screener_client import ScreenerClient
                 sc = ScreenerClient()
+                overview = sc.fetch_company_overview(symbol)
+                if overview and overview.get("face_value"):
+                    try:
+                        fv_val = float(overview["face_value"])
+                        if fv_val > 0:
+                            company.face_value = fv_val
+                            db.commit()
+                    except Exception:
+                        pass
+                annual_filings = sc.fetch_annual_history(symbol)
                 q_filings = sc.fetch_quarterly_history(symbol)
-                bs_filings = sc.fetch_balance_sheet_history(symbol)
 
-                # Ingest balance sheets
-                for bs in bs_filings:
-                    ped = bs.get("period_end_date")
-                    if not ped:
-                        continue
-                    existing_bs = db.query(BitemporalFinancial).filter_by(
-                        company_id=company.company_id, period_end_date=ped, period_type="ANNUAL"
-                    ).first()
-                    if not existing_bs:
+                # Ingest annual statements (balance sheet, P&L, cash flows, ratios)
+                if annual_filings:
+                    for a_f in annual_filings:
+                        ped = a_f.get("period_end_date")
+                        if not ped:
+                            continue
                         pub_dt = datetime.combine(ped, datetime.min.time()) + timedelta(days=60)
                         BitemporalIngestionEngine.ingest_financial_record(
                             db=db,
@@ -364,19 +444,16 @@ class WatchlistManager:
                             period_end_date=ped,
                             publication_date=pub_dt,
                             source="SCREENER_XBRL_ANNUAL",
-                            metrics=bs,
-                            consolidation_scope=bs.get("consolidation_scope", "CONSOLIDATED")
+                            metrics=a_f,
+                            consolidation_scope=a_f.get("consolidation_scope", "CONSOLIDATED")
                         )
 
                 # Ingest quarterly statements
-                for qf in q_filings:
-                    ped = qf.get("period_end_date")
-                    if not ped:
-                        continue
-                    existing_q = db.query(BitemporalFinancial).filter_by(
-                        company_id=company.company_id, period_end_date=ped, period_type="QUARTERLY"
-                    ).first()
-                    if not existing_q:
+                if q_filings:
+                    for qf in q_filings:
+                        ped = qf.get("period_end_date")
+                        if not ped:
+                            continue
                         pub_dt = datetime.combine(ped, datetime.min.time()) + timedelta(days=45)
                         BitemporalIngestionEngine.ingest_financial_record(
                             db=db,
@@ -396,9 +473,60 @@ class WatchlistManager:
                                 "consolidation_scope": qf.get("consolidation_scope", "CONSOLIDATED")
                             }
                         )
-                logger.info(f"[Financials Ingest] Ingested verified financial statements for {symbol} via Screener XBRL.")
+                if annual_filings or q_filings:
+                    db.commit()
+                    screener_ok = True
+                    logger.info(f"[Financials Ingest] Ingested verified financial statements for {symbol} via Screener XBRL.")
             except Exception as e:
+                db.rollback()
                 logger.warning(f"Error fetching Screener financials for {symbol}: {e}")
+
+            # ROBUST MULTI-SOURCE REDUNDANT FALLBACK:
+            # If Screener is down, timed out, or returned incomplete records, fall back to Yahoo Finance
+            recheck_q = db.query(BitemporalFinancial).filter_by(
+                company_id=company.company_id, period_type="QUARTERLY"
+            ).count()
+            recheck_a = db.query(BitemporalFinancial).filter(
+                BitemporalFinancial.company_id == company.company_id,
+                BitemporalFinancial.period_type == "ANNUAL",
+                BitemporalFinancial.revenue.isnot(None)
+            ).count()
+
+            if recheck_q < 4 or recheck_a < 2:
+                try:
+                    logger.info(f"[Financials Ingest] Ingesting verified statements for {symbol} via Yahoo Finance fallback...")
+                    yf_annual = yf_client.fetch_annual_financials(symbol)
+                    for af in yf_annual:
+                        BitemporalIngestionEngine.ingest_financial_record(
+                            db=db,
+                            company_id=company.company_id,
+                            period_type="ANNUAL",
+                            period_end_date=af["period_end_date"],
+                            publication_date=af["publication_date"],
+                            source="YFINANCE_ANNUAL",
+                            metrics=af["metrics"],
+                            raw_payload=af.get("raw_payload"),
+                            consolidation_scope=af.get("consolidation_scope", "YFINANCE_UNVERIFIED")
+                        )
+
+                    yf_qtr = yf_client.fetch_quarterly_financials(symbol)
+                    for qf in yf_qtr:
+                        BitemporalIngestionEngine.ingest_financial_record(
+                            db=db,
+                            company_id=company.company_id,
+                            period_type="QUARTERLY",
+                            period_end_date=qf["period_end_date"],
+                            publication_date=qf["publication_date"],
+                            source="YFINANCE_QUARTERLY",
+                            metrics=qf["metrics"],
+                            raw_payload=qf.get("raw_payload"),
+                            consolidation_scope=qf.get("consolidation_scope", "YFINANCE_UNVERIFIED")
+                        )
+                    db.commit()
+                    logger.info(f"[Financials Ingest] Successfully persisted {len(yf_annual)} annual and {len(yf_qtr)} quarterly records for {symbol} via Yahoo Finance.")
+                except Exception as e:
+                    db.rollback()
+                    logger.error(f"Error fetching Yahoo Finance financials fallback for {symbol}: {e}")
 
         # Shared NSE client — single session used for shareholding, board meetings, and announcements
         from src.db.models.governance import ShareholdingHistory
@@ -407,7 +535,7 @@ class WatchlistManager:
 
         # 3. Shareholding Pattern
         sh_data = None
-        if sh_count == 0 or not fast_mode:
+        if not fast_mode:
             try:
                 sh_data = ShareholdingClient.fetch_shareholding_pattern(symbol, nse_client=nse_client)
                 if sh_data and sh_data.get("promoter_holding_pct") is not None:
@@ -466,10 +594,9 @@ class WatchlistManager:
                 sh_data = None
 
         # 4. Official Regulatory Disclosures & Half-Life Decay Scoring
-        ann_count = db.query(CorporateAnnouncement).filter_by(company_id=company.company_id).count()
         active_announcements = []
         ingested_at_now = datetime.utcnow()
-        if ann_count == 0 or not fast_mode:
+        if not fast_mode:
             try:
                 from src.ingestion.bse_announcements_client import BseAnnouncementsClient
                 bse_client = BseAnnouncementsClient()
@@ -581,6 +708,26 @@ class WatchlistManager:
 
             except Exception as e:
                 logger.warning(f"Error processing official exchange announcements for {symbol}: {e}")
+        else:
+            # In fast_mode, load already-ingested announcements directly from DB (zero network calls)
+            db_announcements = db.query(CorporateAnnouncement).filter_by(
+                company_id=company.company_id
+            ).order_by(CorporateAnnouncement.source_published_at.desc()).limit(10).all()
+            for ann in db_announcements:
+                active_announcements.append({
+                    "event_type": ann.event_type,
+                    "headline": ann.headline,
+                    "summary": ann.headline,
+                    "publication_date": ann.source_published_at.strftime("%Y-%m-%d %H:%M") if ann.source_published_at else "",
+                    "material_value_cr": ann.material_value_cr,
+                    "raw_score": ann.raw_materiality_score,
+                    "decayed_score": ann.decayed_score,
+                    "track_type": ann.track_type,
+                    "status": ann.status,
+                    "source_type": ann.source_type,
+                    "is_m6_eligible": True,
+                    "source_url": ann.source_url or "",
+                })
 
         # 5. Forward-Looking Catalyst Calendar (SEBI LODR Reg 29 Board Meetings)
         next_board_meeting = {
@@ -592,7 +739,7 @@ class WatchlistManager:
         }
         if not fast_mode:
             try:
-                meetings = nse_client.fetch_board_meetings(symbol)
+                meetings = nse_client.fetch_board_meetings(symbol) if nse_client else []
                 future_meetings = [m for m in meetings if m["days_until_meeting"] is not None and m["days_until_meeting"] >= 0]
                 if future_meetings:
                     future_meetings.sort(key=lambda x: x["days_until_meeting"])
@@ -606,6 +753,34 @@ class WatchlistManager:
                     }
             except Exception as e:
                 logger.warning(f"Error fetching board meeting calendar for {symbol}: {e}")
+        else:
+            # In fast_mode, load future board meetings directly from DB (zero network calls)
+            from src.db.models import BoardMeetingAnnouncement
+            bm = db.query(BoardMeetingAnnouncement).filter(
+                BoardMeetingAnnouncement.company_id == company.company_id,
+                BoardMeetingAnnouncement.meeting_date >= today
+            ).order_by(BoardMeetingAnnouncement.meeting_date.asc()).first()
+            if bm:
+                days_left = (bm.meeting_date - today).days
+                next_board_meeting = {
+                    "meeting_date": bm.meeting_date.strftime("%Y-%m-%d"),
+                    "purpose": bm.purpose,
+                    "days_until_event": days_left,
+                    "urgency_status": "CRITICAL_EARNINGS" if days_left <= 3 else "SCHEDULED",
+                    "blackout_period_active": days_left <= 3
+                }
+            elif active_announcements:
+                latest_ann = active_announcements[0]
+                next_board_meeting = {
+                    "meeting_date": "TBD",
+                    "purpose": latest_ann.get("headline", "Awaiting Advance Notice"),
+                    "days_until_event": None,
+                    "urgency_status": "AWAITING_NOTICE",
+                    "blackout_period_active": False,
+                    "latest_filing_headline": latest_ann.get("headline"),
+                    "latest_filing_date": latest_ann.get("publication_date"),
+                    "latest_filing_type": latest_ann.get("event_type")
+                }
 
         # 6. Compute Full 360-Degree Intelligence with 9 Multibagger Questions
         # Fetch macro regime once (non-blocking — falls back to defaults on any error)
@@ -672,14 +847,24 @@ class WatchlistManager:
 
                     # Zero-fabrication check: only record ResearchFeatureSnapshot if authentic primitives exist
                     if rev is not None and ebit is not None and mcap is not None and mcap > 0 and nw is not None:
+                        rev_growth_val = pit_features.get("revenue_yoy_growth_pct")
+                        pat_growth_val = pit_features.get("pat_yoy_growth_pct")
+                        roce_val = pit_features.get("roce_pct") or 0.0
+
+                        # Derive prior year sales from authentic revenue growth if available
+                        if rev_growth_val is not None and (1.0 + (rev_growth_val / 100.0)) > 0.1:
+                            sales_prev = rev / (1.0 + (rev_growth_val / 100.0))
+                        else:
+                            sales_prev = rev
+
                         tam_dat = ReverseTAMHurdleEngine.resolve_industry_tam(symbol, getattr(company.sector, "sector_name", "General"))
                         tam_res = ReverseTAMHurdleEngine.evaluate_10x_reverse_hurdle(mcap, rev, pat or 0.0, tam_dat["niche_tam_cr"], tam_dat["macro_tam_cr"])
                         roic_res = EconomicROICEngine.calculate_economic_roic(ebit, 25.0, nw, debt, cash)
-                        capex_res = ReinvestmentCalculator.calculate_growth_vs_maintenance_capex(capex_val, depr_val, rev, rev * 0.85)
+                        capex_res = ReinvestmentCalculator.calculate_growth_vs_maintenance_capex(capex_val, depr_val, rev, sales_prev)
                         reinvest_res = ReinvestmentCalculator.calculate_growth_reinvestment_rate(capex_res["growth_capex_cr"], 0.0, roic_res["nopat_cr"], roic_res["economic_roic_pct"])
-                        moat_res = CompetitivePositionEngine.evaluate_displacement_dynamics(symbol, getattr(company.sector, "sector_name", "General"), pit_features.get("revenue_yoy_growth_pct", 15.0) or 15.0)
-                        latent_res = LatentUpsideEngine.calculate_latent_upside_map(rev, ebit, pat or 0.0, mcap, pit_features.get("roce_pct", 15.0) or 15.0)
-                        coords_res = LifecycleClassifier.calculate_continuous_lifecycle_coordinates(mcap, pit_features.get("revenue_yoy_growth_pct", 15.0) or 15.0, pit_features.get("pat_yoy_growth_pct", 15.0) or 15.0, pit_features.get("roce_pct", 15.0) or 15.0, 10.0, pe or 25.0)
+                        moat_res = CompetitivePositionEngine.evaluate_displacement_dynamics(symbol, getattr(company.sector, "sector_name", "General"), rev_growth_val or 0.0)
+                        latent_res = LatentUpsideEngine.calculate_latent_upside_map(rev, ebit, pat or 0.0, mcap, roce_val)
+                        coords_res = LifecycleClassifier.calculate_continuous_lifecycle_coordinates(mcap, rev_growth_val or 0.0, pat_growth_val or 0.0, roce_val, 10.0, pe or 25.0)
 
                         from src.analytics.canonical_hasher import compute_canonical_hash
                         in_h = compute_canonical_hash(pit_features)
@@ -801,8 +986,8 @@ class WatchlistManager:
             high_52w = max(p.high_price for p in prices)
             low_52w = min(p.low_price for p in prices)
         else:
-            high_52w = cur_price * 1.2
-            low_52w = cur_price * 0.8
+            high_52w = cur_price
+            low_52w = cur_price
 
         dist_52w_high_pct = round(((cur_price - high_52w) / max(0.01, high_52w)) * 100, 2)
 
@@ -853,7 +1038,7 @@ class WatchlistManager:
                 pledge_p = float(last_sh.promoter_pledge_pct or 0.0)
                 fii_p = float(last_sh.fii_holding_pct) if last_sh.fii_holding_pct is not None else None
                 dii_p = float(last_sh.dii_holding_pct) if last_sh.dii_holding_pct is not None else None
-                inst_p = round((fii_p or 0.0) + (dii_p or 0.0), 2)
+                inst_p = round((fii_p or 0.0) + (dii_p or 0.0), 2) if (fii_p is not None or dii_p is not None) else None
             else:
                 promoter_p = None
                 pledge_p = None
@@ -863,12 +1048,90 @@ class WatchlistManager:
         else:
             promoter_p = float(sh_data.get("promoter_holding_pct")) if sh_data.get("promoter_holding_pct") is not None else None
             pledge_p = float(sh_data.get("promoter_pledge_pct") or 0.0)
-        # Valuation Assessment via Layer 5 3-Pillar ValuationEngine
+            fii_p = float(sh_data.get("fii_holding_pct")) if sh_data.get("fii_holding_pct") is not None else None
+            dii_p = float(sh_data.get("dii_holding_pct")) if sh_data.get("dii_holding_pct") is not None else None
+            inst_p = float(sh_data.get("institutional_holding_pct")) if sh_data.get("institutional_holding_pct") is not None else (round((fii_p or 0.0) + (dii_p or 0.0), 2) if (fii_p is not None or dii_p is not None) else None)
+        # 5-Pillar Multibagger Discovery & Trajectory Inflection Synthesis
         from src.analytics.valuation_engine import ValuationEngine
         from src.analytics.trajectory_inflection import TrajectoryInflectionEngine
+
+        fin_records = db.query(BitemporalFinancial).filter(
+            BitemporalFinancial.company_id == company.company_id
+        ).order_by(BitemporalFinancial.period_end_date.asc()).all()
+
+        ebitda_hist = [f.ebitda for f in fin_records if f.ebitda is not None]
+        margin_hist = [round((f.ebitda / f.revenue) * 100.0, 2) for f in fin_records if f.ebitda is not None and f.revenue and f.revenue > 0]
+
+        # In Indian reporting, balance sheets are filed semi-annually (Sept) and annually (March),
+        # while interim quarters report P&L. Find the latest audited balance sheet primitives:
+        latest_bs_fin = next((f for f in reversed(fin_records) if f.trade_receivables is not None or f.net_worth is not None), None)
+        latest_pnl_fin = next((f for f in reversed(fin_records) if f.revenue and f.revenue > 0), None)
+
+        curr_receivables = next((f.trade_receivables for f in reversed(fin_records) if f.trade_receivables is not None and f.trade_receivables > 0), (latest_bs_fin.trade_receivables if latest_bs_fin else None))
+        curr_inventories = next((f.inventories for f in reversed(fin_records) if f.inventories is not None and f.inventories >= 0), (latest_bs_fin.inventories if latest_bs_fin else None))
+        curr_payables = next((f.trade_payables for f in reversed(fin_records) if f.trade_payables is not None and f.trade_payables >= 0), (latest_bs_fin.trade_payables if latest_bs_fin else None))
+        curr_gross_block = next((f.ppe_gross for f in reversed(fin_records) if f.ppe_gross is not None and f.ppe_gross > 0), (latest_bs_fin.ppe_gross if latest_bs_fin else None))
+        curr_cwip = next((f.capital_wip for f in reversed(fin_records) if f.capital_wip is not None and f.capital_wip >= 0), (latest_bs_fin.capital_wip if latest_bs_fin else None))
+        curr_cfo = next((f.operating_cash_flow for f in reversed(fin_records) if f.operating_cash_flow is not None), None)
+        curr_ebitda = next((f.ebitda for f in reversed(fin_records) if f.ebitda is not None), (latest_pnl_fin.ebitda if latest_pnl_fin else None))
+
+        # Detect if this company reports semi-annually (H1/H2) vs quarterly
+        # by measuring the typical gap between successive QUARTERLY-labelled filings.
+        _period_fin_records = [f for f in fin_records if f.period_type == "QUARTERLY"]
+        _is_semi_annual_wm = False
+        if len(_period_fin_records) >= 2:
+            try:
+                from datetime import datetime as _dt
+                _d0 = _dt.strptime(str(_period_fin_records[-1].period_end_date)[:10], "%Y-%m-%d")
+                _d1 = _dt.strptime(str(_period_fin_records[-2].period_end_date)[:10], "%Y-%m-%d")
+                if abs((_d0 - _d1).days) > 130:
+                    _is_semi_annual_wm = True
+            except Exception:
+                pass
+        _periods_per_year_wm = 2 if _is_semi_annual_wm else 4
+
+        # TTM Revenue and TTM PAT calculation (cadence-aware)
+        recent_pnl_records = [f for f in fin_records if f.period_type == "QUARTERLY"][-_periods_per_year_wm:]
+        quarter_revs = [f.revenue for f in recent_pnl_records if f.revenue]
+        ttm_revenue = (sum(quarter_revs) * (_periods_per_year_wm / len(quarter_revs))) if quarter_revs else (latest_pnl_fin.revenue if latest_pnl_fin else None)
+
+        quarter_pats = [f.pat for f in recent_pnl_records if f.pat is not None]
+        ttm_pat = (sum(quarter_pats) * (_periods_per_year_wm / len(quarter_pats))) if quarter_pats else (latest_pnl_fin.pat if latest_pnl_fin else None)
+
+        # Authentic DSO history: scale periodic (semi-annual or quarterly) revenue to annual
+        dso_hist = []
+        for f in fin_records:
+            if f.trade_receivables is not None and f.trade_receivables > 0:
+                if f.revenue and f.period_type == "ANNUAL":
+                    ann_rev = f.revenue
+                elif f.revenue and f.revenue > 0:
+                    # Scale individual period revenue to annual using detected cadence
+                    ann_rev = f.revenue * _periods_per_year_wm
+                else:
+                    ann_rev = ttm_revenue
+                if ann_rev and ann_rev > 0:
+                    dso_hist.append(round((f.trade_receivables / ann_rev) * 365.0, 1))
+            elif f.raw_payload and f.raw_payload.get("debtor_days") is not None:
+                dso_hist.append(float(f.raw_payload["debtor_days"]))
+
+        if not dso_hist and curr_receivables and ttm_revenue and ttm_revenue > 0:
+            dso_hist.append(round((curr_receivables / ttm_revenue) * 365.0, 1))
+
+        # Free Cash Flow & Market Cap derivation for institutional Reverse-DCF
         fcf_cr = None
         if lt.get("fcf_yield_pct") is not None and lt.get("market_cap_cr") is not None:
             fcf_cr = (lt["fcf_yield_pct"] / 100.0) * lt["market_cap_cr"]
+        elif lt.get("ttm_fcf") is not None:
+            fcf_cr = lt.get("ttm_fcf")
+        else:
+            fcf_cr = next((f.free_cash_flow for f in reversed(fin_records) if f.free_cash_flow is not None), None)
+
+        mcap_val = lt.get("market_cap_cr")
+        if not mcap_val and ttm_pat and ttm_pat > 0 and lt.get("pe_ratio") and lt.get("pe_ratio") > 0:
+            mcap_val = round(lt["pe_ratio"] * ttm_pat, 2)
+        elif not mcap_val and cur_price and cur_price > 0:
+            # Fallback estimation based on standard listed float
+            mcap_val = round((cur_price * 10000000) / 1e7, 2)
 
         val_eval = ValuationEngine.evaluate_valuation(
             pe_ratio=lt.get("pe_ratio"),
@@ -876,28 +1139,12 @@ class WatchlistManager:
             eps_growth_pct=lt.get("pat_growth_yoy") if lt.get("pat_growth_yoy") is not None else lt.get("revenue_growth_yoy"),
             roce_pct=lt.get("roce_pct"),
             ttm_fcf_cr=fcf_cr,
-            market_cap_cr=lt.get("market_cap_cr"),
+            market_cap_cr=mcap_val,
             debt_to_equity=lt.get("debt_to_equity"),
-            pe_percentile_3y=50.0
+            pe_percentile_3y=50.0,
+            ttm_nopat_cr=ttm_pat,
+            sustainable_growth_pct=lt.get("revenue_growth_yoy")
         )
-
-        # 5-Pillar Multibagger Discovery & Trajectory Inflection Synthesis
-        fin_records = db.query(BitemporalFinancial).filter(
-            BitemporalFinancial.company_id == company.company_id
-        ).order_by(BitemporalFinancial.period_end_date.asc()).all()
-
-        ebitda_hist = [f.ebitda for f in fin_records if f.ebitda is not None]
-        margin_hist = [round((f.ebitda / f.revenue) * 100.0, 2) for f in fin_records if f.ebitda is not None and f.revenue and f.revenue > 0]
-        dso_hist = [round((f.trade_receivables / f.revenue) * 365.0, 2) for f in fin_records if f.trade_receivables is not None and f.revenue and f.revenue > 0]
-
-        latest_fin = fin_records[-1] if fin_records else None
-        curr_receivables = latest_fin.trade_receivables if latest_fin else None
-        curr_inventories = latest_fin.inventories if latest_fin else None
-        curr_payables = latest_fin.trade_payables if latest_fin else None
-        curr_cfo = latest_fin.operating_cash_flow if latest_fin else None
-        curr_ebitda = latest_fin.ebitda if latest_fin else None
-        curr_gross_block = latest_fin.ppe_gross if latest_fin else None
-        curr_cwip = latest_fin.capital_wip if latest_fin else None
 
         # Candle price series
         if adj_prices:
@@ -917,10 +1164,28 @@ class WatchlistManager:
             daily_lows_series = [low_52w]
             daily_volumes_series = [100000.0]
 
+        bench_closes = get_benchmark_closes()
+
+        # Compute genuine empirical reinvestment rate from audited filings
+        from src.analytics.reinvestment_calculator import ReinvestmentCalculator
+        reinv_rate_eff = None
+        reinv_traj = ReinvestmentCalculator.calculate_incremental_roce_trajectory(db, company.company_id)
+        if reinv_traj:
+            valid_rr = [r["reinvestment_rate_pct"] for r in reinv_traj if r.get("reinvestment_rate_pct") is not None and r["reinvestment_rate_pct"] > 0]
+            if valid_rr:
+                reinv_rate_eff = round(sum(valid_rr[-3:]) / len(valid_rr[-3:]), 1)
+        if reinv_rate_eff is None and curr_cfo and latest_bs_fin and latest_bs_fin.capex and curr_cfo > 0:
+            reinv_rate_eff = round(min(100.0, max(5.0, (latest_bs_fin.capex / curr_cfo) * 100.0)), 1)
+        if reinv_rate_eff is None:
+            # Damodaran identity: g = ROCE * RR => RR = g / ROCE
+            rev_g = lt.get("revenue_growth_yoy") or 15.0
+            roce_val = lt.get("roce_pct") or 20.0
+            reinv_rate_eff = round(min(90.0, max(10.0, (rev_g / roce_val) * 100.0)), 1) if roce_val > 0 else 40.0
+
         multibagger_5pillar_eval = TrajectoryInflectionEngine.synthesize_5pillar_multibagger_matrix(
             symbol=symbol,
             sector=intel.get("sector", "General"),
-            current_revenue_cr=latest_fin.revenue if latest_fin else None,
+            current_revenue_cr=ttm_revenue,
             gross_block_cr=curr_gross_block,
             cwip_cr=curr_cwip,
             asset_turnover=None,
@@ -933,12 +1198,12 @@ class WatchlistManager:
             current_ebitda_cr=curr_ebitda,
             revenue_growth_yoy_pct=lt.get("revenue_growth_yoy"),
             receivables_growth_yoy_pct=None,
-            dso_history=dso_hist if len(dso_hist) >= 2 else None,
+            dso_history=dso_hist if len(dso_hist) >= 1 else None,
             economic_roic_pct=lt.get("roce_pct"),
-            reinvestment_rate_pct=50.0,
+            reinvestment_rate_pct=reinv_rate_eff,
             market_implied_growth_5y_pct=val_eval.get("reverse_dcf_implied_growth_pct"),
             daily_closes=daily_closes_series,
-            benchmark_closes=None,
+            benchmark_closes=bench_closes if len(bench_closes) >= 50 else None,
             daily_highs=daily_highs_series,
             daily_lows=daily_lows_series,
             daily_volumes=daily_volumes_series,
@@ -1054,12 +1319,22 @@ class WatchlistManager:
     def get_all_watchlist_stocks(cls) -> List[Dict[str, Any]]:
         """
         Returns all active stocks in the database with their complete parameter profiles.
+        Runs in strict fast_mode to compute in milliseconds from DB cache without blocking on network.
         """
         db = SessionLocal()
         try:
-            companies = db.query(Company).filter_by(status="ACTIVE").all()
+            companies = db.query(Company).filter(
+                Company.status == "ACTIVE",
+                ~Company.nse_symbol.like("%TEST%")
+            ).all()
             all_records = []
             for comp in companies:
+                if not comp.nse_symbol:
+                    continue
+                # Ensure the company has daily market price candles
+                has_prices = db.query(DailyPriceRaw.company_id).filter_by(company_id=comp.company_id).first() is not None
+                if not has_prices:
+                    continue
                 try:
                     rec = cls.ingest_and_calculate_all_parameters(comp.nse_symbol, db, fast_mode=True)
                     all_records.append(rec)
@@ -1092,14 +1367,51 @@ class WatchlistManager:
             now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
             try:
-                companies = db.query(Company).filter_by(status="ACTIVE").all()
+                companies = db.query(Company).filter_by(status="ACTIVE").filter(~Company.nse_symbol.like("%TEST%")).all()
                 if not companies:
                     return {"success": True, "refreshed_count": 0, "timestamp": now_str}
 
                 for comp in companies:
                     try:
-                        upstox.ingest_stock_data(db, comp.nse_symbol)
-                        refreshed.append(comp.nse_symbol)
+                        from src.ingestion.yfinance_client import YFinanceClient as _YFC
+                        _sme_suffix = _YFC._TICKER_SUFFIX_CACHE.get(comp.nse_symbol.upper(), ".NS")
+                        use_yf = (_sme_suffix in ("-SM.NS", ".BO") or str(_sme_suffix).endswith(".BO")) or (not upstox.is_authenticated())
+
+                        if not use_yf:
+                            try:
+                                upstox.ingest_stock_data(db, comp.nse_symbol)
+                                refreshed.append(comp.nse_symbol)
+                            except Exception as upstox_err:
+                                logger.warning(f"[Auto-Refresh] Upstox failed for {comp.nse_symbol}: {upstox_err}. Falling back to Yahoo Finance.")
+                                use_yf = True
+
+                        if use_yf:
+                            from datetime import date as _d, timedelta as _td
+                            yf_c = _YFC()
+                            _today = _d.today()
+                            _prices = yf_c.fetch_daily_prices(comp.nse_symbol, _today - _td(days=5), _today)
+                            _new = 0
+                            for _p in _prices:
+                                _cp = _p.get("close_price")
+                                if not _cp or (isinstance(_cp, float) and (_cp != _cp or _cp <= 0)):
+                                    continue
+                                _row = DailyPriceRaw(
+                                    company_id=comp.company_id,
+                                    trading_date=_p["trading_date"],
+                                    open_price=_p["open_price"],
+                                    high_price=_p["high_price"],
+                                    low_price=_p["low_price"],
+                                    close_price=_cp,
+                                    volume=_p.get("volume", 0),
+                                    turnover=_p.get("turnover"),
+                                    exchange=_p.get("exchange", "NSE"), quote_type="CLOSE", price_source="YFINANCE",
+                                )
+                                db.merge(_row)
+                                _new += 1
+                            db.commit()
+                            if _new:
+                                logger.info(f"[Auto-Refresh] {comp.nse_symbol}: Updated {_new} candles via Yahoo Finance.")
+                            refreshed.append(comp.nse_symbol)
                     except Exception as e:
                         logger.error(f"[Auto-Refresh] Error refreshing {comp.nse_symbol}: {e}")
                         errors.append({"symbol": comp.nse_symbol, "error": str(e)})

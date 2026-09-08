@@ -44,7 +44,12 @@ client_secrets.json
 *.db
 *.sqlite
 *.sqlite3
+*.db-shm
+*.db-wal
 data/*.db
+
+# Scratch & Temporary files
+scratch/
 
 # Logs
 logs/

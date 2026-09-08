@@ -1,0 +1,61 @@
+# Walkthrough: AI Institutional Investment Committee Memo Reader Upgrade
+
+We have redesigned and upgraded the **Adversarial Investment Committee Memo Modal** (`#aiAnalystModal`) to eliminate the cramped view and provide a spacious, executive reading experience.
+
+---
+
+## 🎯 Problems Addressed
+
+1. **Cramped Viewport**: The previous modal was restricted to `max-width: 960px` with fixed vertical padding, making extensive memos difficult to read and scroll.
+2. **Vertical Real Estate Hogging**: The Grounded Metric KPI bar (6 columns), Sequential QoQ Trajectory Ribbon (5 quarters), and Live News Feed were stacked permanently at the top, consuming ~400px of vertical space and leaving only ~250px for reading.
+3. **Tiny Typography**: Markdown memos were rendered in tiny `0.76rem` (~12px) text with tight line heights, causing eye fatigue.
+4. **Lack of Presentation & Export Controls**: No easy way to expand full screen, adjust text sizing, or copy the committee synthesis to the clipboard for reports.
+
+---
+
+## 🚀 Key Improvements & Features Implemented
+
+### 1. Ultra-Wide Default Desktop Dimensions
+- Replaced the default box sizing with `.ai-modal-box`:
+  - **Width**: `95vw` (up to `1400px` max-width, compared to the old 960px).
+  - **Height**: `92vh` (with custom-styled neon purple/cyan scrollbars).
+
+### 2. Collapsible Telemetry Signals Drawer (`📊 Hide Signals` / `📊 Show Signals`)
+- Wrapped the Grounded KPI bar, QoQ Operating Leverage Trajectory Ribbon, and Real-time News Radar in `#aiTelemetryDrawer`.
+- Added a 1-click **`📊 Hide Signals`** toolbar button that collapses this entire section, instantly giving **~90% of the modal viewport exclusively to the analysis memo**.
+
+### 3. Fullscreen Reader Mode (`⛶ Fullscreen`)
+- Added a 1-click **`⛶ Fullscreen`** button (and global `Escape` key integration) that expands the modal to **`99vw` width and `98vh` height**, creating a distraction-free, full-display investment committee reading experience.
+
+### 4. Elevated Institutional Typography & Dynamic Scaling (`A-` / `A+`)
+- Base body text scaled up to **`0.92rem` (14.5px)** with generous **`1.65` line-height**.
+- Seat cards (🐂 Seat 1 Bull, 🐻 Seat 2 Bear, 📡 Seat 3 Radar, ⚖️ Seat 4 Payoff Matrix) styled with distinct background tints, crisp borders, and comfortable internal padding.
+- Added **`A-` and `A+` font-scaling buttons** directly in the header toolbar, allowing the user to seamlessly toggle between Compact, Standard, and Large reader typography.
+
+### 5. 1-Click Clipboard Export (`📋 Copy Memo`)
+- Added a **`📋 Copy Memo`** button that copies the unrendered markdown text of the memo directly to your system clipboard with visual `✓ Copied!` confirmation.
+
+---
+
+## 📸 Visual Verification
+
+````carousel
+![AI Memo Initial View](file:///C:/Users/bagul/.gemini/antigravity-ide/brain/57b1f2ea-1962-49c1-9924-7bb21ec12fa9/ai_memo_initial_1788718805686.png)
+<!-- slide -->
+![Collapsing Telemetry Drawer](file:///C:/Users/bagul/.gemini/antigravity-ide/brain/57b1f2ea-1962-49c1-9924-7bb21ec12fa9/ai_memo_signals_hidden_1788718825830.png)
+<!-- slide -->
+![Fullscreen Reader Mode](file:///C:/Users/bagul/.gemini/antigravity-ide/brain/57b1f2ea-1962-49c1-9924-7bb21ec12fa9/ai_memo_fullscreen_1788718850113.png)
+<!-- slide -->
+![Font Scaling with A+ Button](file:///C:/Users/bagul/.gemini/antigravity-ide/brain/57b1f2ea-1962-49c1-9924-7bb21ec12fa9/ai_memo_font_increase_1788718879749.png)
+<!-- slide -->
+![Final Verified Fullscreen Memo](file:///C:/Users/bagul/.gemini/antigravity-ide/brain/57b1f2ea-1962-49c1-9924-7bb21ec12fa9/ai_memo_final_verified_1788718908130.png)
+````
+
+---
+
+## 🛠️ Modified Files
+
+- [dashboard/index.html](file:///d:/Projects/Stock_Watchlist_Hub/dashboard/index.html):
+  - **CSS** (lines 550–635): Added `.ai-modal-box`, `.fullscreen-mode`, `.memo-reader-body`, `.font-compact`, `.font-large`, custom neon gradient scrollbar, and `.ai-toolbar-btn`.
+  - **HTML** (lines 1279–1385): Restructured the AI Analyst modal with toolbar action controls and `#aiTelemetryDrawer`.
+  - **JavaScript** (lines 3033–3390): Implemented `toggleAIMemoFullscreen()`, `toggleAITelemetryDrawer()`, `changeAIMemoFontSize()`, `copyAIMemo()`, Escape key handler, and elevated typography rules in `renderAIMemoHTML()`.

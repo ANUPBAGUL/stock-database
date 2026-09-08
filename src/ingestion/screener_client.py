@@ -32,6 +32,9 @@ class ScreenerClient:
     """
 
     BASE_URL = "https://www.screener.in"
+    _CIRCUIT_BROKEN = False
+    _CIRCUIT_BREAK_TIMESTAMP = 0.0
+    _COOLDOWN_SECONDS = 120.0
 
     def __init__(self):
         self._session = cffi_requests.Session(impersonate="chrome124")
@@ -41,35 +44,74 @@ class ScreenerClient:
             "Accept-Language": "en-US,en;q=0.9",
         }
 
+    @staticmethod
+    def _soup_has_table_data(soup: BeautifulSoup) -> bool:
+        """Verifies that the HTML soup contains at least one financial table with data columns."""
+        for sec_id in ["balance-sheet", "profit-loss", "quarters"]:
+            sec = soup.find("section", id=sec_id)
+            if sec:
+                tbl = sec.find("table")
+                if tbl:
+                    hdrs = [th.text.strip() for th in tbl.find_all("th") if th.text.strip()]
+                    if len(hdrs) > 1:
+                        return True
+        return False
+
     def _get_company_soup(self, symbol: str) -> Tuple[Optional[BeautifulSoup], str]:
         """
         Fetches the company page from Screener.
         Prefers consolidated statements (`/company/{symbol}/consolidated/`)
-        and falls back to standalone (`/company/{symbol}/`) if consolidated is unavailable.
+        and falls back to standalone (`/company/{symbol}/`) if consolidated is unavailable or empty.
+        Uses fail-fast circuit breaker if Screener is unreachable.
         """
+        import time
+        now = time.time()
+        if ScreenerClient._CIRCUIT_BROKEN:
+            if now - ScreenerClient._CIRCUIT_BREAK_TIMESTAMP < ScreenerClient._COOLDOWN_SECONDS:
+                logger.debug(f"[Screener] Circuit breaker active; skipping network call for {symbol}")
+                return None, "UNAVAILABLE"
+            else:
+                ScreenerClient._CIRCUIT_BROKEN = False
+
         sym_clean = symbol.upper().strip().replace(".NS", "").replace(".BO", "")
         
         # 1. Try Consolidated
         url_cons = f"{self.BASE_URL}/company/{sym_clean}/consolidated/"
-        for attempt in range(2):
-            try:
-                r = self._session.get(url_cons, headers=self._headers, timeout=15)
-                if r.status_code == 200:
+        try:
+            r = self._session.get(url_cons, headers=self._headers, timeout=5)
+            if r.status_code == 200:
+                soup_c = BeautifulSoup(r.text, "html.parser")
+                if self._soup_has_table_data(soup_c):
                     logger.info(f"[Screener] Fetched CONSOLIDATED financials for {sym_clean}")
-                    return BeautifulSoup(r.text, "html.parser"), "CONSOLIDATED"
-            except Exception as e:
-                logger.debug(f"[Screener] Consolidated URL attempt {attempt+1} failed for {sym_clean}: {e}")
+                    return soup_c, "CONSOLIDATED"
+                else:
+                    logger.info(f"[Screener] Consolidated page has empty tables for {sym_clean}; falling back to STANDALONE.")
+        except Exception as e:
+            err_msg = str(e).lower()
+            if "timed out" in err_msg or "connect" in err_msg or "timeout" in err_msg:
+                # Connection-level timeout indicates host is unreachable — trip circuit breaker
+                logger.warning(f"[Screener] Connection timed out on {url_cons}: {e}. Tripping circuit breaker for {ScreenerClient._COOLDOWN_SECONDS}s.")
+                ScreenerClient._CIRCUIT_BROKEN = True
+                ScreenerClient._CIRCUIT_BREAK_TIMESTAMP = now
+                return None, "UNAVAILABLE"
+            logger.debug(f"[Screener] Consolidated URL failed for {sym_clean}: {e}")
 
         # 2. Fallback to Standalone
         url_std = f"{self.BASE_URL}/company/{sym_clean}/"
-        for attempt in range(2):
-            try:
-                r = self._session.get(url_std, headers=self._headers, timeout=15)
-                if r.status_code == 200:
+        try:
+            r = self._session.get(url_std, headers=self._headers, timeout=5)
+            if r.status_code == 200:
+                soup_s = BeautifulSoup(r.text, "html.parser")
+                if self._soup_has_table_data(soup_s):
                     logger.info(f"[Screener] Fetched STANDALONE financials for {sym_clean}")
-                    return BeautifulSoup(r.text, "html.parser"), "STANDALONE"
-            except Exception as e:
-                logger.debug(f"[Screener] Standalone attempt {attempt+1} failed for {sym_clean}: {e}")
+                    return soup_s, "STANDALONE"
+        except Exception as e:
+            err_msg = str(e).lower()
+            if "timed out" in err_msg or "connect" in err_msg or "timeout" in err_msg:
+                ScreenerClient._CIRCUIT_BROKEN = True
+                ScreenerClient._CIRCUIT_BREAK_TIMESTAMP = now
+                return None, "UNAVAILABLE"
+            logger.debug(f"[Screener] Standalone attempt failed for {sym_clean}: {e}")
 
         # 3. Fallback to BSE code or symbol aliases if standard ticker fails
         aliases = []
@@ -92,13 +134,69 @@ class ScreenerClient:
         for alias in aliases:
             for url in [f"{self.BASE_URL}/company/{alias}/consolidated/", f"{self.BASE_URL}/company/{alias}/"]:
                 try:
-                    r = self._session.get(url, headers=self._headers, timeout=15)
+                    r = self._session.get(url, headers=self._headers, timeout=5)
                     if r.status_code == 200:
-                        scope = "CONSOLIDATED" if "/consolidated/" in url else "STANDALONE"
-                        logger.info(f"[Screener] Fetched {scope} financials for {sym_clean} via alias {alias}")
-                        return BeautifulSoup(r.text, "html.parser"), scope
+                        soup_a = BeautifulSoup(r.text, "html.parser")
+                        if self._soup_has_table_data(soup_a):
+                            scope = "CONSOLIDATED" if "/consolidated/" in url else "STANDALONE"
+                            logger.info(f"[Screener] Fetched {scope} financials for {sym_clean} via alias {alias}")
+                            return soup_a, scope
                 except Exception:
                     pass
+
+        # 4. Fallback to Screener Search API to resolve canonical URL / BSE Scrip Code
+        try:
+            search_url = f"{self.BASE_URL}/api/company/search/?q={sym_clean}"
+            sr = self._session.get(search_url, headers=self._headers, timeout=5)
+            if sr.status_code == 200:
+                results = sr.json()
+                if isinstance(results, list) and len(results) > 0:
+                    best_match = None
+                    for res in results:
+                        res_url = res.get("url", "")
+                        if res_url:
+                            best_match = res
+                            break
+
+                    if best_match:
+                        canonical_path = best_match.get("url", "").strip("/")
+                        bse_m = re.search(r'\b(5\d{5})\b', canonical_path)
+                        bse_code_found = bse_m.group(1) if bse_m else None
+                        company_name_found = best_match.get("name")
+
+                        # Persist verified BSE code and genuine company name in DB
+                        if bse_code_found or company_name_found:
+                            try:
+                                from src.db.base import SessionLocal
+                                from src.db.models import Company
+                                db_up = SessionLocal()
+                                comp_to_up = db_up.query(Company).filter(
+                                    (Company.nse_symbol == sym_clean) | (Company.bse_code == sym_clean)
+                                ).first()
+                                if comp_to_up:
+                                    if bse_code_found and (not comp_to_up.bse_code or comp_to_up.bse_code == sym_clean):
+                                        comp_to_up.bse_code = bse_code_found
+                                    if company_name_found and (not comp_to_up.company_name or comp_to_up.company_name.endswith("Limited")):
+                                        comp_to_up.company_name = company_name_found
+                                    db_up.commit()
+                                db_up.close()
+                            except Exception as db_e:
+                                logger.debug(f"[Screener] Could not update company BSE code in DB: {db_e}")
+
+                        # Fetch from canonical URL path (consolidated and standalone)
+                        for c_url in [f"{self.BASE_URL}/{canonical_path}/consolidated/", f"{self.BASE_URL}/{canonical_path}/"]:
+                            try:
+                                r_c = self._session.get(c_url, headers=self._headers, timeout=5)
+                                if r_c.status_code == 200:
+                                    soup_c = BeautifulSoup(r_c.text, "html.parser")
+                                    if self._soup_has_table_data(soup_c):
+                                        scope = "CONSOLIDATED" if "/consolidated/" in c_url else "STANDALONE"
+                                        logger.info(f"[Screener] Fetched {scope} financials for {sym_clean} via search resolution: {c_url}")
+                                        return soup_c, scope
+                            except Exception:
+                                pass
+        except Exception as se:
+            logger.debug(f"[Screener] Search API resolution failed for {sym_clean}: {se}")
 
         logger.warning(f"[Screener] All attempts failed for {sym_clean}")
         return None, "UNAVAILABLE"
@@ -107,13 +205,16 @@ class ScreenerClient:
     # 1. SEBI Shareholding Pattern History (Clause 31 LODR)
     # ──────────────────────────────────────────────────────────────
 
-    def fetch_shareholding_history(self, symbol: str) -> List[Dict[str, Any]]:
+    def fetch_shareholding_history(
+        self, symbol: str, soup: Optional[BeautifulSoup] = None, scope: Optional[str] = None
+    ) -> List[Dict[str, Any]]:
         """
         Extracts quarterly SEBI shareholding pattern history (Promoter, FII, DII, Public, Govt).
         
         Returns list of quarterly dicts ordered chronologically descending (newest first).
         """
-        soup, scope = self._get_company_soup(symbol)
+        if soup is None:
+            soup, scope = self._get_company_soup(symbol)
         if not soup:
             return []
 
@@ -202,12 +303,15 @@ class ScreenerClient:
     # 2. Audited Balance Sheet Primitives (10-Year History)
     # ──────────────────────────────────────────────────────────────
 
-    def fetch_balance_sheet_history(self, symbol: str) -> List[Dict[str, Any]]:
+    def fetch_balance_sheet_history(
+        self, symbol: str, soup: Optional[BeautifulSoup] = None, scope: Optional[str] = None
+    ) -> List[Dict[str, Any]]:
         """
         Extracts full audited annual/semi-annual balance sheets.
         Disaggregates financial debt (Borrowings) from Lease Liabilities and Other Liabilities.
         """
-        soup, scope = self._get_company_soup(symbol)
+        if soup is None:
+            soup, scope = self._get_company_soup(symbol)
         if not soup:
             return []
 
@@ -276,6 +380,7 @@ class ScreenerClient:
                     "borrowings": borrowings,
                     "total_debt": borrowings,
                     "other_liabilities": other_liab,
+                    "current_liabilities": other_liab,
                     "total_liabilities": total_liab,
                     "fixed_assets": fixed_assets,
                     "cwip": cwip,
@@ -296,16 +401,158 @@ class ScreenerClient:
             return []
 
     # ──────────────────────────────────────────────────────────────
+    # 2b. Unified Audited Annual History (P&L, Balance Sheet, Cash Flow, Ratios)
+    # ──────────────────────────────────────────────────────────────
+
+    def fetch_annual_history(
+        self, symbol: str, soup: Optional[BeautifulSoup] = None, scope: Optional[str] = None
+    ) -> List[Dict[str, Any]]:
+        """
+        Extracts multi-year unified annual financial statements merging:
+        - Balance Sheet (#balance-sheet)
+        - Profit & Loss (#profit-loss)
+        - Cash Flow (#cash-flow)
+        - Forensic Ratios (#ratios)
+        Provides complete bitemporal primitives (Revenue, EBIT, OCF, CapEx, FCF, Net Worth, Debt).
+        """
+        if soup is None:
+            soup, scope = self._get_company_soup(symbol)
+        if not soup:
+            return []
+
+        bs_rows, bs_hdrs = self._parse_html_table(soup, "balance-sheet")
+        pl_rows, pl_hdrs = self._parse_html_table(soup, "profit-loss")
+        cf_rows, cf_hdrs = self._parse_html_table(soup, "cash-flow")
+        rt_rows, rt_hdrs = self._parse_html_table(soup, "ratios")
+
+        year_labels = [h for h in bs_hdrs if h and h.lower() != "ttm"]
+        if not year_labels:
+            year_labels = [h for h in pl_hdrs if h and h.lower() != "ttm"]
+
+        records = []
+        for yr_label in year_labels:
+            period_end = self._parse_year_label(yr_label)
+            if not period_end:
+                continue
+
+            b_idx = bs_hdrs.index(yr_label) if yr_label in bs_hdrs else None
+            p_idx = pl_hdrs.index(yr_label) if yr_label in pl_hdrs else None
+            c_idx = cf_hdrs.index(yr_label) if yr_label in cf_hdrs else None
+            r_idx = rt_hdrs.index(yr_label) if yr_label in rt_hdrs else None
+
+            # 1. Income Statement Primitives
+            sales = self._find_category_val(pl_rows, ["sales", "revenue"], p_idx) if p_idx is not None else None
+            op_profit = self._find_category_val(pl_rows, ["operating profit"], p_idx) if p_idx is not None else None
+            depr = self._find_category_val(pl_rows, ["depreciation"], p_idx) if p_idx is not None else 0.0
+            ebit = (op_profit - depr) if (op_profit is not None and depr is not None) else None
+            other_inc = self._find_category_val(pl_rows, ["other income"], p_idx) if p_idx is not None else 0.0
+            interest = self._find_category_val(pl_rows, ["interest", "finance costs"], p_idx) if p_idx is not None else 0.0
+            pbt = self._find_category_val(pl_rows, ["profit before tax", "pbt"], p_idx) if p_idx is not None else None
+            tax_pct = self._find_category_val(pl_rows, ["tax %"], p_idx) if p_idx is not None else 25.0
+            pat = self._find_category_val(pl_rows, ["net profit", "pat"], p_idx) if p_idx is not None else None
+            eps = self._find_category_val(pl_rows, ["eps in rs", "eps"], p_idx) if p_idx is not None else None
+
+            # 2. Balance Sheet Primitives
+            equity_cap = (self._find_category_val(bs_rows, ["equity capital", "share capital"], b_idx) or 0.0) if b_idx is not None else 0.0
+            reserves = (self._find_category_val(bs_rows, ["reserves", "reserves & surplus"], b_idx) or 0.0) if b_idx is not None else 0.0
+            net_worth = (equity_cap + reserves) if (equity_cap or reserves) else None
+            borrowings = self._find_category_val(bs_rows, ["borrowings", "total debt"], b_idx) if b_idx is not None else None
+            other_liab = self._find_category_val(bs_rows, ["other liabilities"], b_idx) if b_idx is not None else None
+            total_liab = self._find_category_val(bs_rows, ["total liabilities"], b_idx) if b_idx is not None else None
+            fixed_assets = self._find_category_val(bs_rows, ["fixed assets"], b_idx) if b_idx is not None else None
+            cwip = (self._find_category_val(bs_rows, ["cwip", "capital work in progress"], b_idx) or 0.0) if b_idx is not None else 0.0
+            investments = (self._find_category_val(bs_rows, ["investments"], b_idx) or 0.0) if b_idx is not None else 0.0
+            other_assets = (self._find_category_val(bs_rows, ["other assets"], b_idx) or 0.0) if b_idx is not None else 0.0
+            total_assets = self._find_category_val(bs_rows, ["total assets"], b_idx) if b_idx is not None else None
+
+            cap_employed = None
+            if total_assets is not None and other_liab is not None:
+                cap_employed = total_assets - other_liab
+            elif net_worth is not None and borrowings is not None:
+                cap_employed = net_worth + borrowings
+
+            # 3. Cash Flow Statement Primitives
+            cfo = self._find_category_val(cf_rows, ["cash from operating activity"], c_idx) if c_idx is not None else None
+            cfi = self._find_category_val(cf_rows, ["cash from investing activity"], c_idx) if c_idx is not None else None
+            cff = self._find_category_val(cf_rows, ["cash from financing activity"], c_idx) if c_idx is not None else None
+            fcf = self._find_category_val(cf_rows, ["free cash flow"], c_idx) if c_idx is not None else None
+            capex = (cfo - fcf) if (cfo is not None and fcf is not None) else (abs(cfi) if cfi is not None and cfi < 0 else None)
+
+            # 4. Forensic Ratios & Trade Receivables
+            debtor_days = self._find_category_val(rt_rows, ["debtor days"], r_idx) if r_idx is not None else None
+            inventory_days = self._find_category_val(rt_rows, ["inventory days"], r_idx) if r_idx is not None else None
+            days_payable = self._find_category_val(rt_rows, ["days payable"], r_idx) if r_idx is not None else None
+            ccc = self._find_category_val(rt_rows, ["cash conversion cycle"], r_idx) if r_idx is not None else None
+            roce_rt = self._find_category_val(rt_rows, ["roce %"], r_idx) if r_idx is not None else None
+
+            trade_receivables = round((debtor_days / 365.0) * sales, 2) if (debtor_days is not None and sales is not None and sales > 0) else None
+
+            records.append({
+                "period_label": yr_label,
+                "period_end_date": period_end,
+                "period_type": "ANNUAL",
+                "revenue": sales,
+                "sales_cr": sales,
+                "ebitda": op_profit,
+                "ebitda_cr": op_profit,
+                "depreciation": depr,
+                "depreciation_cr": depr,
+                "ebit": ebit,
+                "ebit_cr": ebit,
+                "other_income": other_inc,
+                "interest_expense": interest,
+                "pbt": pbt,
+                "tax_expense": round(tax_pct / 100.0 * pbt, 2) if (tax_pct and pbt) else None,
+                "pat": pat,
+                "pat_cr": pat,
+                "eps": eps,
+                "equity_share_capital": equity_cap,
+                "reserves_and_surplus": reserves,
+                "net_worth": net_worth,
+                "borrowings": borrowings,
+                "total_debt": borrowings,
+                "other_liabilities": other_liab,
+                "current_liabilities": other_liab,
+                "total_liabilities": total_liab,
+                "fixed_assets": fixed_assets,
+                "capital_wip": cwip,
+                "investments": investments,
+                "other_assets": other_assets,
+                "total_assets": total_assets,
+                "capital_employed": cap_employed,
+                "operating_cash_flow": cfo,
+                "investing_cash_flow": cfi,
+                "financing_cash_flow": cff,
+                "capex": capex,
+                "free_cash_flow": fcf,
+                "trade_receivables": trade_receivables,
+                "debtor_days": debtor_days,
+                "inventory_days": inventory_days,
+                "days_payable": days_payable,
+                "cash_conversion_cycle": ccc,
+                "roce_pct": roce_rt,
+                "consolidation_scope": scope,
+                "source": "SCREENER_AUDITED_ANNUAL"
+            })
+
+        records.reverse()
+        logger.info(f"[Screener] Extracted {len(records)} unified audited annual records for {symbol}")
+        return records
+
+    # ──────────────────────────────────────────────────────────────
     # 3. Quarterly Audited Results (10-Year History / Up to 40+ Quarters)
     # ──────────────────────────────────────────────────────────────
 
-    def fetch_quarterly_history(self, symbol: str) -> List[Dict[str, Any]]:
+    def fetch_quarterly_history(
+        self, symbol: str, soup: Optional[BeautifulSoup] = None, scope: Optional[str] = None
+    ) -> List[Dict[str, Any]]:
         """
         Extracts up to 10 years of quarterly audited/un-audited P&L statements.
         Includes Sales, Expenses, Operating Profit, OPM %, Other Income,
         Interest, Depreciation, Profit before tax, Tax %, Net Profit, EPS.
         """
-        soup, scope = self._get_company_soup(symbol)
+        if soup is None:
+            soup, scope = self._get_company_soup(symbol)
         if not soup:
             return []
 
@@ -392,20 +639,48 @@ class ScreenerClient:
     # 4. Verified Key Financial Ratios (Current Audited Overview)
     # ──────────────────────────────────────────────────────────────
 
-    def fetch_company_overview(self, symbol: str) -> Dict[str, Any]:
+    def fetch_company_overview(
+        self, symbol: str, soup: Optional[BeautifulSoup] = None, scope: Optional[str] = None
+    ) -> Dict[str, Any]:
         """
         Fetches current verified key metrics (ROCE, ROE, P/E, Book Value, Market Cap).
         """
-        soup, scope = self._get_company_soup(symbol)
+        if soup is None:
+            soup, scope = self._get_company_soup(symbol)
         if not soup:
             return {}
 
         ratios: Dict[str, Any] = {"symbol": symbol.upper(), "consolidation_scope": scope}
+        high_52w, low_52w = None, None
+
         for li in soup.find_all("li", class_="flex"):
             name_span = li.find("span", class_="name")
+            if not name_span:
+                continue
+            name = name_span.text.strip().lower()
+
+            # Special handling for High / Low 52-week row
+            if "high" in name and "low" in name:
+                num_spans = li.find_all("span", class_="number")
+                if len(num_spans) >= 2:
+                    try:
+                        high_52w = float(num_spans[0].text.strip().replace(",", ""))
+                        low_52w = float(num_spans[1].text.strip().replace(",", ""))
+                    except ValueError:
+                        pass
+                if high_52w is None:
+                    # Regex fallback
+                    numbers = re.findall(r'[\d,]+(?:\.\d+)?', li.text)
+                    if len(numbers) >= 2:
+                        try:
+                            high_52w = float(numbers[0].replace(",", ""))
+                            low_52w = float(numbers[1].replace(",", ""))
+                        except ValueError:
+                            pass
+                continue
+
             val_span = li.find("span", class_="number") or li.find("span", class_="value")
-            if name_span and val_span:
-                name = name_span.text.strip().lower()
+            if val_span:
                 val_str = val_span.text.strip().replace(",", "")
                 try:
                     val = float(val_str)
@@ -417,7 +692,8 @@ class ScreenerClient:
             "symbol": symbol.upper(),
             "market_cap_crores": ratios.get("market cap"),
             "current_price": ratios.get("current price"),
-            "high_52w": ratios.get("high / low", 0) if isinstance(ratios.get("high / low"), (int, float)) else None,
+            "high_52w": high_52w,
+            "low_52w": low_52w,
             "stock_pe": ratios.get("stock p/e"),
             "book_value": ratios.get("book value"),
             "dividend_yield_pct": ratios.get("dividend yield"),
@@ -429,8 +705,67 @@ class ScreenerClient:
         }
 
     # ──────────────────────────────────────────────────────────────
+    # 5. Single-Pass Complete Ingestion
+    # ──────────────────────────────────────────────────────────────
+
+    def fetch_complete_financial_history(self, symbol: str) -> Dict[str, Any]:
+        """
+        Fetches annual, quarterly, shareholding, and overview fundamentals in a single unified fetch.
+        Eliminates redundant HTTP calls and guarantees all statements share identical consolidation scope.
+        """
+        soup, scope = self._get_company_soup(symbol)
+        if not soup:
+            return {
+                "annual": [],
+                "quarterly": [],
+                "shareholding": [],
+                "overview": {},
+                "consolidation_scope": "UNAVAILABLE"
+            }
+
+        annual_records = self.fetch_annual_history(symbol, soup=soup, scope=scope)
+        quarterly_records = self.fetch_quarterly_history(symbol, soup=soup, scope=scope)
+        shareholding_records = self.fetch_shareholding_history(symbol, soup=soup, scope=scope)
+        overview_data = self.fetch_company_overview(symbol, soup=soup, scope=scope)
+
+        return {
+            "annual": annual_records,
+            "quarterly": quarterly_records,
+            "shareholding": shareholding_records,
+            "overview": overview_data,
+            "consolidation_scope": scope
+        }
+
+    # ──────────────────────────────────────────────────────────────
     # Helpers
     # ──────────────────────────────────────────────────────────────
+
+    @staticmethod
+    def _parse_html_table(soup: BeautifulSoup, section_id: str) -> Tuple[Dict[str, List[Optional[float]]], List[str]]:
+        sec = soup.find("section", id=section_id)
+        if not sec:
+            return {}, []
+        tbl = sec.find("table")
+        if not tbl:
+            return {}, []
+        headers = [th.text.strip() for th in tbl.find_all("th") if th.text.strip()]
+        rows = {}
+        tbody = tbl.find("tbody")
+        if not tbody:
+            return rows, headers
+        for tr in tbody.find_all("tr"):
+            tds = tr.find_all("td")
+            if tds:
+                name = tds[0].text.strip().replace("\xa0+", "").strip().lower()
+                vals = []
+                for td in tds[1:]:
+                    v_str = td.text.strip().replace(",", "").replace("%", "")
+                    try:
+                        vals.append(float(v_str) if v_str and v_str != "-" else None)
+                    except ValueError:
+                        vals.append(None)
+                rows[name] = vals
+        return rows, headers
 
     @staticmethod
     def _find_category_val(data: Dict[str, List[Any]], keys: List[str], col_idx: int) -> Optional[float]:

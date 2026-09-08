@@ -55,10 +55,104 @@ class YFinanceClient:
             time.sleep(self.rate_limit_seconds - elapsed)
         self._last_request_time = time.time()
 
+    # Cache of resolved Yahoo Finance ticker suffixes per NSE symbol
+    # Key: NSE symbol (str), Value: Yahoo Finance suffix ('.NS' or '-SM.NS')
+    # Pre-seeded with known NSE SME/Emerge (NSME) segment stocks that use -SM.NS suffix.
+    # Auto-detection in _get_ticker() will add any newly discovered ones at runtime.
+    _TICKER_SUFFIX_CACHE: dict = {
+        # NSE SME/Emerge (NSME) segment — confirmed via live scan Sep 2026
+        "SAHANA":    "-SM.NS",
+        "PRIZOR":    "-SM.NS",
+        "EFFWA":     "-SM.NS",
+        "ANLON":     "-SM.NS",
+        "GRCL":      "-SM.NS",
+        "SHEETAL":   "-SM.NS",
+        "AIMTRON":   "-SM.NS",
+        "UNIHEALTH": "-SM.NS",
+        "DYNAMIC":   "-SM.NS",
+        "ACCENTMIC": "-SM.NS",
+        "DANISH":    "-SM.NS",
+        "VINSYS":    "-SM.NS",
+        "NAMOEWASTE":"-SM.NS",
+        "UTSSAV":    "-SM.NS",
+        "GPECO":     "-SM.NS",
+        "SUNLITE":   "-SM.NS",
+    }
+
     def _get_ticker(self, nse_symbol: str) -> yf.Ticker:
+        """
+        Returns the correct Yahoo Finance Ticker for an equity symbol.
+
+        Hierarchy:
+        1. NSE Main Board: SYMBOL.NS
+        2. NSE SME/Emerge: SYMBOL-SM.NS (e.g. SAHANA-SM.NS)
+        3. BSE Main / SME: SYMBOL.BO (e.g. YASHHV.BO, COSPOWER.BO)
+        4. BSE Scrip Code: {bse_code}.BO (e.g. 544310.BO)
+
+        The correct suffix is auto-detected once and cached in _TICKER_SUFFIX_CACHE.
+        """
         self._throttle()
-        yahoo_symbol = f"{nse_symbol}.NS"
-        return yf.Ticker(yahoo_symbol)
+        sym = nse_symbol.upper().strip()
+
+        if sym in YFinanceClient._TICKER_SUFFIX_CACHE:
+            cached_val = YFinanceClient._TICKER_SUFFIX_CACHE[sym]
+            target_str = f"{sym}{cached_val}" if cached_val.startswith((".", "-")) else cached_val
+            return yf.Ticker(target_str)
+
+        # Try the standard main-board suffix first
+        suffix = ".NS"
+        try:
+            probe = yf.Ticker(f"{sym}.NS")
+            h = probe.history(period="2d", auto_adjust=False)
+            if not h.empty:
+                suffix = ".NS"
+            else:
+                # No data for .NS — try the SME/Emerge suffix
+                probe_sm = yf.Ticker(f"{sym}-SM.NS")
+                h_sm = probe_sm.history(period="2d", auto_adjust=False)
+                if not h_sm.empty:
+                    suffix = "-SM.NS"
+                    logger.info(f"[YFinance] {sym}: SME/Emerge segment detected — using {sym}-SM.NS")
+                else:
+                    # Try BSE (.BO) with symbol
+                    probe_bo = yf.Ticker(f"{sym}.BO")
+                    h_bo = probe_bo.history(period="2d", auto_adjust=False)
+                    if not h_bo.empty:
+                        suffix = ".BO"
+                        logger.info(f"[YFinance] {sym}: BSE segment detected — using {sym}.BO")
+                    else:
+                        # Try looking up 6-digit BSE scrip code from DB if available
+                        bse_code_resolved = None
+                        try:
+                            from src.db.base import SessionLocal
+                            from src.db.models import Company
+                            db_chk = SessionLocal()
+                            c_chk = db_chk.query(Company).filter(
+                                (Company.nse_symbol == sym) | (Company.bse_code == sym)
+                            ).first()
+                            if c_chk and c_chk.bse_code and c_chk.bse_code != sym and c_chk.bse_code.isdigit():
+                                bse_code_resolved = c_chk.bse_code
+                            db_chk.close()
+                        except Exception:
+                            pass
+
+                        if bse_code_resolved:
+                            probe_bcode = yf.Ticker(f"{bse_code_resolved}.BO")
+                            h_bcode = probe_bcode.history(period="2d", auto_adjust=False)
+                            if not h_bcode.empty:
+                                suffix = f"{bse_code_resolved}.BO"
+                                logger.info(f"[YFinance] {sym}: BSE scrip code detected — using {bse_code_resolved}.BO")
+                                YFinanceClient._TICKER_SUFFIX_CACHE[sym] = suffix
+                                return probe_bcode
+
+                        logger.warning(f"[YFinance] {sym}: No price data found on NSE, NSE-SM, or BSE")
+            if suffix != ".NS" or (not h.empty):
+                YFinanceClient._TICKER_SUFFIX_CACHE[sym] = suffix
+        except Exception as e:
+            logger.warning(f"[YFinance] {sym}: Error during suffix detection — {e}. Defaulting to .NS without caching.")
+
+        target_str = f"{sym}{suffix}" if suffix.startswith((".", "-")) else suffix
+        return yf.Ticker(target_str)
 
     # ──────────────────────────────────────────────────────────────
     # OHLCV Price Data
@@ -114,9 +208,9 @@ class YFinanceClient:
                     "deliverable_volume": None,
                     "delivery_pct":       None,
                     # Provenance fields
-                    "is_split_adjusted":  False,   # Raw price — must apply PriceAdjuster
+                    "is_split_adjusted":  True,   # Yahoo Finance OHLC candles are already split-adjusted
                     "price_source":       "YFINANCE",
-                    "exchange":           "NSE",
+                    "exchange":           "BSE" if str(getattr(ticker, "ticker", "")).endswith(".BO") else "NSE",
                     "quote_type":         "CLOSE",
                 })
 
@@ -125,6 +219,66 @@ class YFinanceClient:
 
         except Exception as e:
             logger.error(f"[yfinance] Error fetching prices for {nse_symbol}: {e}")
+            return []
+
+    # ──────────────────────────────────────────────────────────────
+    # Corporate Actions (Splits, Bonuses, Dividends)
+    # ──────────────────────────────────────────────────────────────
+
+    def fetch_corporate_actions(self, nse_symbol: str) -> List[Dict[str, Any]]:
+        """
+        Fetch historical corporate actions (splits, bonuses, dividends) from Yahoo Finance.
+        Yahoo Finance reports splits and bonuses under .splits with split_ratio = (new / old).
+        Dividends are reported under .dividends in INR per share.
+
+        Returns a list of standardized dicts:
+            ex_date: date,
+            action_type: 'SPLIT' | 'DIVIDEND',
+            old_shares: float,
+            new_shares: float,
+            dividend_amount: float,
+            description: str
+        """
+        try:
+            ticker = self._get_ticker(nse_symbol)
+            actions_list = []
+
+            # 1. Splits and Bonuses
+            splits = ticker.splits
+            if splits is not None and not splits.empty:
+                for idx, ratio in splits.items():
+                    ex_dt = idx.date() if hasattr(idx, 'date') else idx
+                    ratio_val = float(ratio)
+                    if ratio_val > 0:
+                        actions_list.append({
+                            "ex_date": ex_dt,
+                            "action_type": "SPLIT",
+                            "old_shares": 1.0,
+                            "new_shares": ratio_val,
+                            "dividend_amount": 0.0,
+                            "description": f"Stock Split/Bonus ratio 1:{ratio_val:g}"
+                        })
+
+            # 2. Dividends
+            dividends = ticker.dividends
+            if dividends is not None and not dividends.empty:
+                for idx, div_amt in dividends.items():
+                    ex_dt = idx.date() if hasattr(idx, 'date') else idx
+                    div_val = float(div_amt)
+                    if div_val > 0:
+                        actions_list.append({
+                            "ex_date": ex_dt,
+                            "action_type": "DIVIDEND",
+                            "old_shares": 1.0,
+                            "new_shares": 1.0,
+                            "dividend_amount": round(div_val, 2),
+                            "description": f"Dividend of INR {div_val:.2f} per share"
+                        })
+
+            logger.info(f"[yfinance] Fetched {len(actions_list)} corporate actions for {nse_symbol}")
+            return actions_list
+        except Exception as e:
+            logger.error(f"[yfinance] Error fetching corporate actions for {nse_symbol}: {e}")
             return []
 
     # ──────────────────────────────────────────────────────────────
@@ -235,10 +389,14 @@ class YFinanceClient:
                     shares = self._safe_get_bs_tolerant(balance_sheet, "Ordinary Shares Number", col_date)
                 
                 # Unit sanity check: yfinance sometimes returns shares in millions instead of absolute count
-                # For Indian companies, shares < 500,000 is implausible (would imply tiny float)
+                # Only rescale if shares < 500,000 AND company has large net worth/revenue (> 500 Cr)
+                # indicating a unit omission rather than a legitimate micro-float equity structure.
                 if shares is not None and shares < 500_000:
-                    logger.warning(f"[yfinance] {nse_symbol} shares_outstanding={shares:,.0f} appears to be in millions. Rescaling by 1,000,000.")
-                    shares = shares * 1_000_000
+                    nw_check = (net_worth or 0.0)
+                    rev_check = (revenue or 0.0)
+                    if nw_check > 500.0 or rev_check > 500.0:
+                        logger.warning(f"[yfinance] {nse_symbol} shares_outstanding={shares:,.0f} appears to be in millions for large enterprise. Rescaling by 1,000,000.")
+                        shares = shares * 1_000_000
 
                 receivables = self._safe_get_bs_tolerant(balance_sheet, "Receivables", col_date)
                 if receivables is None:
@@ -330,6 +488,185 @@ class YFinanceClient:
 
         except Exception as e:
             logger.error(f"[yfinance] Error fetching financials for {nse_symbol}: {e}")
+            return []
+
+    # ──────────────────────────────────────────────────────────────
+    # Annual Financial Statements
+    # ──────────────────────────────────────────────────────────────
+
+    def fetch_annual_financials(
+        self, nse_symbol: str
+    ) -> List[Dict[str, Any]]:
+        """
+        Fetch audited annual financial statements (income statement + balance sheet + cash flow).
+        Returns list of dicts with keys matching BitemporalFinancial schema for period_type='ANNUAL'.
+        All monetary values in INR Crores.
+        """
+        try:
+            ticker = self._get_ticker(nse_symbol)
+
+            income_stmt   = ticker.financials
+            balance_sheet = ticker.balance_sheet
+            cash_flow     = ticker.cashflow
+
+            if income_stmt is None or income_stmt.empty:
+                logger.warning(f"[yfinance] No annual financials for {nse_symbol}")
+                return []
+
+            records = []
+            for col_date in income_stmt.columns:
+                period_end = col_date.date() if hasattr(col_date, 'date') else col_date
+                pub_date = datetime.combine(period_end, datetime.min.time()) + timedelta(days=60)
+
+                # ── Income statement ──
+                revenue = self._safe_get(income_stmt, "Total Revenue", col_date)
+                if revenue is None:
+                    revenue = self._safe_get(income_stmt, "Operating Revenue", col_date)
+
+                ebitda = self._safe_get(income_stmt, "EBITDA", col_date)
+                if ebitda is None:
+                    ebitda = self._safe_get(income_stmt, "Normalized EBITDA", col_date)
+
+                ebit = self._safe_get(income_stmt, "EBIT", col_date)
+                if ebit is None:
+                    ebit = self._safe_get(income_stmt, "Operating Income", col_date)
+
+                net_income = self._safe_get(income_stmt, "Net Income", col_date)
+                if net_income is None:
+                    net_income = self._safe_get(income_stmt, "Net Income From Continuing Ops", col_date)
+                if net_income is None:
+                    net_income = self._safe_get(income_stmt, "Net Income Common Stockholders", col_date)
+
+                depreciation = self._safe_get(income_stmt, "Reconciled Depreciation", col_date) or 0.0
+                if ebitda is None and ebit is not None:
+                    ebitda = ebit + depreciation
+
+                # ── Balance sheet ──
+                total_assets     = self._safe_get_bs_tolerant(balance_sheet, "Total Assets", col_date, tolerance_days=10)
+                total_liabilities = self._safe_get_bs_tolerant(balance_sheet, "Total Liab", col_date, tolerance_days=10)
+                if total_liabilities is None:
+                    total_liabilities = self._safe_get_bs_tolerant(balance_sheet, "Total Liabilities Net Minority Interest", col_date, tolerance_days=10)
+
+                net_worth = self._safe_get_bs_tolerant(balance_sheet, "Total Stockholder Equity", col_date, tolerance_days=10)
+                if net_worth is None:
+                    net_worth = self._safe_get_bs_tolerant(balance_sheet, "Stockholders Equity", col_date, tolerance_days=10)
+                if net_worth is None:
+                    net_worth = self._safe_get_bs_tolerant(balance_sheet, "Common Stock Equity", col_date, tolerance_days=10)
+
+                total_debt = self._safe_get_bs_tolerant(balance_sheet, "Total Debt", col_date, tolerance_days=10)
+                financial_debt_lt = self._safe_get_bs_tolerant(balance_sheet, "Long Term Debt", col_date, tolerance_days=10)
+                if total_debt is None and financial_debt_lt is not None:
+                    total_debt = financial_debt_lt
+
+                lease_liabilities_lt = None
+                if total_debt is not None and financial_debt_lt is not None and total_debt > financial_debt_lt:
+                    lease_liabilities_lt = total_debt - financial_debt_lt
+
+                cash = self._safe_get_bs_tolerant(balance_sheet, "Cash And Cash Equivalents", col_date, tolerance_days=10)
+                if cash is None:
+                    cash = self._safe_get_bs_tolerant(balance_sheet, "Cash", col_date, tolerance_days=10)
+
+                current_investments = self._safe_get_bs_tolerant(balance_sheet, "Other Short Term Investments", col_date, tolerance_days=10)
+                if current_investments is None:
+                    current_investments = self._safe_get_bs_tolerant(balance_sheet, "Short Term Investments", col_date, tolerance_days=10)
+
+                net_debt = None
+                if total_debt is not None and cash is not None:
+                    net_debt = total_debt - cash - (current_investments or 0.0)
+
+                current_liab = self._safe_get_bs_tolerant(balance_sheet, "Current Liabilities", col_date, tolerance_days=10)
+                if current_liab is None:
+                    current_liab = self._safe_get_bs_tolerant(balance_sheet, "Total Current Liabilities", col_date, tolerance_days=10)
+
+                shares = self._safe_get_bs_tolerant(balance_sheet, "Share Issued", col_date, tolerance_days=10)
+                if shares is None:
+                    shares = self._safe_get_bs_tolerant(balance_sheet, "Ordinary Shares Number", col_date, tolerance_days=10)
+                if shares is not None and shares < 500_000:
+                    if (net_worth is not None and net_worth > 5_000_000_000) or (revenue is not None and revenue > 5_000_000_000):
+                        shares = shares * 10_000_000.0
+
+                receivables = self._safe_get_bs_tolerant(balance_sheet, "Receivables", col_date, tolerance_days=10)
+                if receivables is None:
+                    receivables = self._safe_get_bs_tolerant(balance_sheet, "Accounts Receivable", col_date, tolerance_days=10)
+
+                inventories = self._safe_get_bs_tolerant(balance_sheet, "Inventory", col_date, tolerance_days=10)
+                payables = self._safe_get_bs_tolerant(balance_sheet, "Accounts Payable", col_date, tolerance_days=10)
+                fixed_assets = self._safe_get_bs_tolerant(balance_sheet, "Net PPE", col_date, tolerance_days=10)
+                if fixed_assets is None:
+                    fixed_assets = self._safe_get_bs_tolerant(balance_sheet, "Gross PPE", col_date, tolerance_days=10)
+                cwip = self._safe_get_bs_tolerant(balance_sheet, "Construction In Progress", col_date, tolerance_days=10) or 0.0
+
+                # ── Cash flow ──
+                ocf = self._safe_get_cf(cash_flow, "Operating Cash Flow", col_date)
+                if ocf is None:
+                    ocf = self._safe_get_cf(cash_flow, "Cash Flow From Continuing Operating Activities", col_date)
+
+                capex_raw = self._safe_get_cf(cash_flow, "Capital Expenditure", col_date)
+                capex = abs(capex_raw) if capex_raw is not None else None
+
+                metrics = {
+                    "revenue":              self._to_crores(revenue),
+                    "ebitda":               self._to_crores(ebitda),
+                    "ebit":                 self._to_crores(ebit),
+                    "depreciation":         self._to_crores(depreciation),
+                    "pat":                  self._to_crores(net_income),
+                    "eps":                  None,
+                    "operating_cash_flow":  self._to_crores(ocf),
+                    "capex":                self._to_crores(capex),
+                    "total_debt":           self._to_crores(total_debt),
+                    "financial_debt_lt":    self._to_crores(financial_debt_lt),
+                    "financial_debt_st":    None,
+                    "lease_liabilities_lt": self._to_crores(lease_liabilities_lt),
+                    "lease_liabilities_st": None,
+                    "current_investments":  self._to_crores(current_investments),
+                    "net_debt":             self._to_crores(net_debt),
+                    "cash_and_equivalents": self._to_crores(cash),
+                    "total_assets":         self._to_crores(total_assets),
+                    "total_liabilities":    self._to_crores(total_liabilities),
+                    "net_worth":            self._to_crores(net_worth),
+                    "trade_receivables":    self._to_crores(receivables),
+                    "inventories":          self._to_crores(inventories),
+                    "trade_payables":       self._to_crores(payables),
+                    "ppe_gross":            self._to_crores(fixed_assets),
+                    "capital_wip":          self._to_crores(cwip),
+                    "current_liabilities":  self._to_crores(current_liab),
+                    "shares_outstanding":   shares,
+                    "consolidation_scope":  "YFINANCE_UNVERIFIED",
+                }
+
+                if metrics["pat"] is not None and shares and shares > 0:
+                    metrics["eps"] = round((metrics["pat"] * CRORE_DIVISOR) / shares, 2)
+
+                records.append({
+                    "period_end_date":     period_end,
+                    "publication_date":    pub_date,
+                    "period_type":         "ANNUAL",
+                    "source":              "YFINANCE",
+                    "source_quality":      "ESTIMATED_PUB_DATE",
+                    "consolidation_scope": "YFINANCE_UNVERIFIED",
+                    "metrics":             metrics,
+                    "raw_payload": {
+                        "source":           "yfinance",
+                        "symbol":           nse_symbol,
+                        "revenue":          metrics["revenue"],
+                        "pat":              metrics["pat"],
+                        "ebit":             metrics["ebit"],
+                        "ebitda":           metrics["ebitda"],
+                        "ocf":              metrics["operating_cash_flow"],
+                        "capex":            metrics["capex"],
+                        "total_debt":       metrics["total_debt"],
+                        "financial_debt_lt": metrics["financial_debt_lt"],
+                        "net_debt":         metrics["net_debt"],
+                        "pub_date_is_estimated": True,
+                        "fetched_at":       datetime.utcnow().isoformat(),
+                    }
+                })
+
+            logger.info(f"[yfinance] Fetched {len(records)} annual filings for {nse_symbol}")
+            return records
+
+        except Exception as e:
+            logger.error(f"[yfinance] Error fetching annual financials for {nse_symbol}: {e}")
             return []
 
     # ──────────────────────────────────────────────────────────────
@@ -445,22 +782,25 @@ class YFinanceClient:
         return None
 
     @staticmethod
-    def _safe_get_bs_tolerant(df: Optional[pd.DataFrame], row_label: str, col_date, tolerance_days: int = 1) -> Optional[float]:
+    def _safe_get_bs_tolerant(
+        df: Optional[pd.DataFrame],
+        row_label: str,
+        col_date,
+        tolerance_days: int = 100,
+        preceding_only: bool = True
+    ) -> Optional[float]:
         """
-        Safely extract a value from a balance sheet DataFrame with ±N day date tolerance.
-
-        Balance sheet column dates sometimes differ from income statement dates by up to 1 day
-        due to timezone handling in yfinance (e.g., 2026-03-31 vs 2026-04-01 UTC offset).
-        The tolerance prevents silent None returns when the data is present but off by a day.
+        Extract balance sheet item with date tolerance.
+        Defaults to preceding_only=True with 100-day lookback for quarterly statements
+        where full balance sheet is only published semi-annually / annually under SEBI LODR.
         """
         if df is None or df.empty:
             return None
         try:
-            matched_col = YFinanceClient._find_column(df, col_date, tolerance_days=tolerance_days)
+            matched_col = YFinanceClient._find_column(df, col_date, tolerance_days=tolerance_days, preceding_only=preceding_only)
             if matched_col is not None and row_label in df.index:
                 val = df.loc[row_label, matched_col]
                 if pd.notna(val):
-                    # Log if we had to use tolerance to find the match
                     matched_dt = matched_col.date() if hasattr(matched_col, 'date') else matched_col
                     target_dt  = col_date.date() if hasattr(col_date, 'date') else col_date
                     if matched_dt != target_dt:
@@ -476,7 +816,7 @@ class YFinanceClient:
     @staticmethod
     def _safe_get_bs(df: Optional[pd.DataFrame], row_label: str, col_date) -> Optional[float]:
         """Exact-match balance sheet lookup (no tolerance). Use _safe_get_bs_tolerant for production."""
-        return YFinanceClient._safe_get_bs_tolerant(df, row_label, col_date, tolerance_days=0)
+        return YFinanceClient._safe_get_bs_tolerant(df, row_label, col_date, tolerance_days=0, preceding_only=False)
 
     @staticmethod
     def _safe_get_cf(df: Optional[pd.DataFrame], row_label: str, col_date) -> Optional[float]:
@@ -484,9 +824,10 @@ class YFinanceClient:
         return YFinanceClient._safe_get(df, row_label, col_date)
 
     @staticmethod
-    def _find_column(df: pd.DataFrame, col_date, tolerance_days: int = 0):
+    def _find_column(df: pd.DataFrame, col_date, tolerance_days: int = 0, preceding_only: bool = False):
         """
-        Find the DataFrame column that best matches col_date, within ±tolerance_days.
+        Find the DataFrame column that best matches col_date.
+        If preceding_only=True, only considers columns where c_dt <= target_dt (Point-in-Time discipline).
         Returns the column key or None if not found.
         """
         target_dt = col_date.date() if hasattr(col_date, 'date') else col_date
@@ -501,14 +842,20 @@ class YFinanceClient:
             if c_dt == target_dt:
                 return c
 
-        # Tolerance-based match
+        # Tolerance / lookback match
         if tolerance_days > 0:
             best_col = None
             best_diff = tolerance_days + 1
             for c in df.columns:
                 c_dt = c.date() if hasattr(c, 'date') else c
                 try:
-                    diff = abs((c_dt - target_dt).days)
+                    if preceding_only:
+                        if c_dt > target_dt:
+                            continue
+                        diff = (target_dt - c_dt).days
+                    else:
+                        diff = abs((c_dt - target_dt).days)
+
                     if diff <= tolerance_days and diff < best_diff:
                         best_diff = diff
                         best_col = c

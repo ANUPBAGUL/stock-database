@@ -112,8 +112,8 @@ class HistoricalPITReplayEngine:
             net_worth_t0 = latest_q.get("net_worth") or latest_q.get("net_worth_cr")
             debt_t0 = latest_q.get("borrowings") or latest_q.get("total_debt") or latest_q.get("total_debt_cr") or 0.0
             cash_t0 = latest_q.get("cash_and_equivalents") or latest_q.get("cash_and_equivalents_cr") or 0.0
-            depr_t0 = latest_q.get("depreciation_cr") or (ttm_rev * 0.03 if ttm_rev else 5.0)
-            capex_t0 = latest_q.get("capex_cr") or (ttm_rev * 0.05 if ttm_rev else 10.0)
+            depr_t0 = float(latest_q.get("depreciation_cr") or 0.0)
+            capex_t0 = float(latest_q.get("capex_cr") or 0.0)
 
             # Price at T0 (Adjusted for subsequent splits/bonuses to maintain economic continuity)
             adj_prices_t0 = PriceAdjuster.get_adjusted_prices(
@@ -124,17 +124,17 @@ class HistoricalPITReplayEngine:
                 as_of_date=t0_date
             )
 
-            t0_price = adj_prices_t0[-1]["adj_close"] if adj_prices_t0 else 100.0
+            t0_price = adj_prices_t0[-1]["adj_close"] if adj_prices_t0 else None
 
             # Shares outstanding at T0
             shares_t0 = latest_q.get("shares_outstanding")
             if not shares_t0 or shares_t0 <= 0:
                 fv = getattr(comp, "face_value", 10.0) or 10.0
-                eq_cap = latest_q.get("equity_capital") or (net_worth_t0 * 0.1 if net_worth_t0 else 10.0)
-                shares_t0 = (eq_cap * 10_000_000.0) / fv if fv > 0 else 10_000_000.0
+                eq_cap = latest_q.get("equity_capital") or (comp.equity_capital if hasattr(comp, "equity_capital") else None)
+                shares_t0 = (float(eq_cap) * 10_000_000.0) / fv if (eq_cap and fv > 0) else None
 
-            mcap_t0 = round((t0_price * shares_t0) / 10_000_000.0, 2) if (t0_price and shares_t0) else (net_worth_t0 or 500.0)
-            pe_t0 = round(mcap_t0 / max(0.1, ttm_pat), 1) if (ttm_pat and ttm_pat > 0) else None
+            mcap_t0 = round((t0_price * shares_t0) / 10_000_000.0, 2) if (t0_price and shares_t0) else (net_worth_t0 or 0.0)
+            pe_t0 = round(mcap_t0 / max(0.1, ttm_pat), 1) if (ttm_pat and ttm_pat > 0 and mcap_t0 > 0) else None
 
             # 3. Calculate 8 Deep Economic Research Lenses at this historical T0 using authentic PIT facts
             tam_dat = ReverseTAMHurdleEngine.resolve_industry_tam(sym_clean, getattr(comp.sector, "sector_name", "General"))
@@ -142,11 +142,11 @@ class HistoricalPITReplayEngine:
             roic_res = EconomicROICEngine.calculate_economic_roic(
                 ebit_cr=ttm_ebit,
                 tax_rate_pct=25.0,
-                net_worth_cr=net_worth_t0 or (ttm_rev * 0.5 if ttm_rev else 250.0),
+                net_worth_cr=net_worth_t0 or 0.0,
                 borrowings_cr=debt_t0,
                 cash_and_equivalents_cr=cash_t0
             )
-            prev_sales = q_slice[-2].get("revenue_cr", 0.0) if len(q_slice) >= 2 else (ttm_rev * 0.85 if ttm_rev else 0.0)
+            prev_sales = float(q_slice[-2].get("revenue_cr", 0.0)) if len(q_slice) >= 2 else (ttm_rev if ttm_rev else 0.0)
             capex_res = ReinvestmentCalculator.calculate_growth_vs_maintenance_capex(
                 total_capex_cr=capex_t0,
                 depreciation_cr=depr_t0,

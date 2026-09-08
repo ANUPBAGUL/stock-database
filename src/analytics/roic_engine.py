@@ -142,7 +142,11 @@ class EconomicROICEngine:
 
         # Classify economic quality of incremental deployment
         curr_roic = current.get("economic_roic_pct", 0.0)
-        if rolling_roiic > curr_roic and rolling_roiic > 20.0:
+        if delta_ic < 0 and delta_nopat > 0:
+            quality = "CAPITAL_EXTRACTION_EFFICIENCY"
+        elif delta_ic < 0 and delta_nopat <= 0:
+            quality = "BUSINESS_CONTRACTION"
+        elif rolling_roiic > curr_roic and rolling_roiic > 20.0:
             quality = "ACCELERATING_CAPITAL_EFFICIENCY"
         elif rolling_roiic >= 15.0:
             quality = "HEALTHY_COMPOUNDER"
