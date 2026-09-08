@@ -87,13 +87,15 @@ class CorporateActionEngine:
         """
         # Factor determination:
         # For splits: old_shares of FV_old become new_shares of FV_new (e.g., 1 -> 5, factor = 1/5 = 0.2)
-        # For bonuses: In Indian disclosures, "Bonus A:B" means A bonus shares for B held.
-        # If new_shares <= old_shares for BONUS (e.g. 1:1, 1:2), it represents bonus_shares per old_shares held,
-        # so total post-bonus shares = old_shares + new_shares.
-        if action_type == "BONUS" and new_shares <= old_shares and new_shares > 0:
-            total_post_shares = old_shares + new_shares
-            price_factor = old_shares / total_post_shares
-            share_factor = total_post_shares / old_shares
+        # For bonuses: In Indian disclosures, "Bonus A:B" means A bonus shares for B shares held.
+        # old_shares = A (bonus shares), new_shares = B (shares held).
+        # Post-bonus total shares = B + A. Price factor = B / (B + A).
+        if action_type == "BONUS":
+            bonus_sh = old_shares if old_shares > 0 else 1.0
+            held_sh = new_shares if new_shares > 0 else 1.0
+            total_post_shares = held_sh + bonus_sh
+            price_factor = held_sh / total_post_shares
+            share_factor = total_post_shares / held_sh
         else:
             price_factor = old_shares / new_shares if new_shares > 0 else 1.0
             share_factor = new_shares / old_shares if old_shares > 0 else 1.0

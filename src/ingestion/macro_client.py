@@ -61,26 +61,33 @@ class MacroRegimeClient:
         except Exception as e:
             logger.debug(f"[Macro] NSE allIndices direct fetch failed: {e}")
 
+        vix_is_live = False
+        if live_vix is not None:
+            vix_is_live = True
+
         # Fallback for VIX via Yahoo if NSE connection timed out
-        if live_vix is None:
+        if not vix_is_live:
             try:
                 vix_hist = yf.Ticker("^INDIAVIX").history(period="5d")
                 if not vix_hist.empty:
                     live_vix = round(float(vix_hist["Close"].iloc[-1]), 2)
+                    vix_is_live = True
             except Exception:
-                live_vix = 11.50
+                pass
 
         # ── 2. Brent Crude Oil (BZ=F) ──
-        crude_price = 74.50
+        crude_price = None
+        crude_is_live = False
         try:
             crude = yf.Ticker("BZ=F").history(period="5d")
             if not crude.empty:
                 crude_price = round(float(crude["Close"].iloc[-1]), 2)
+                crude_is_live = True
         except Exception:
             pass
 
         # ── 3. USD/INR Exchange Rate (INR=X) ──
-        usdinr_rate = 84.10
+        usdinr_rate = None
         try:
             inr = yf.Ticker("INR=X").history(period="5d")
             if not inr.empty:
@@ -92,26 +99,40 @@ class MacroRegimeClient:
         # Official RBI / CCIL benchmark yield for Indian 10-Year Government Securities (GS 2034)
         bond_yield = 6.83
 
-        # ── 5. Regime Synthesis ──
-        if live_vix is not None and live_vix < 14.0 and crude_price < 85.0:
+        # ── 5. Regime Synthesis with Strict Offline Safeguards ──
+        is_live_feed = vix_is_live or crude_is_live
+
+        if not is_live_feed:
+            macro_regime = "DATA_OFFLINE_UNKNOWN"
+            risk_stance = "CAUTION: LIVE_MACRO_FEEDS_OFFLINE (Verify Connectivity)"
+            effective_vix = live_vix if live_vix is not None else 14.0
+            effective_crude = crude_price if crude_price is not None else 78.0
+        elif live_vix is not None and live_vix < 14.0 and (crude_price is None or crude_price < 85.0):
             macro_regime = "BULLISH_EXPANSION"
             risk_stance = "RISK_ON (Full Capital Allocation)"
-        elif (live_vix is not None and live_vix > 18.0) or crude_price > 95.0:
+            effective_vix = live_vix
+            effective_crude = crude_price
+        elif (live_vix is not None and live_vix > 18.0) or (crude_price is not None and crude_price > 95.0):
             macro_regime = "RISK_OFF_CORRECTION"
             risk_stance = "DEFENSIVE (Tighten Trailing Stops, Raise Cash)"
+            effective_vix = live_vix
+            effective_crude = crude_price
         else:
             macro_regime = "NEUTRAL_CONSOLIDATION"
             risk_stance = "SELECTIVE (Focus on High Conviction Setups)"
+            effective_vix = live_vix
+            effective_crude = crude_price
 
         return {
             "as_of_date": date.today().isoformat(),
-            "india_vix": round(live_vix, 2) if live_vix else 11.50,
+            "india_vix": round(effective_vix, 2) if effective_vix else 14.0,
             "nifty_50_pe": nifty_pe,
             "nifty_50_pb": nifty_pb,
-            "brent_crude_usd": crude_price,
-            "usdinr_exchange_rate": usdinr_rate,
+            "brent_crude_usd": effective_crude or 78.0,
+            "usdinr_exchange_rate": usdinr_rate or 84.10,
             "india_10y_bond_yield_pct": bond_yield,
             "macro_regime": macro_regime,
             "risk_stance": risk_stance,
-            "source": "NSE_OFFICIAL_ALLINDICES_AND_GLOBAL_FEEDS"
+            "is_live_feed": is_live_feed,
+            "source": "NSE_OFFICIAL_ALLINDICES_AND_GLOBAL_FEEDS" if is_live_feed else "FALLBACK_OFFLINE_MODE"
         }

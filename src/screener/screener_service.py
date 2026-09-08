@@ -301,6 +301,7 @@ class ScreenerService:
                         "market_cap_cr": mcap,
                         "pe_ratio": round(float(pe), 1) if pe is not None else None,
                         "roce_pct": round(eff_qual, 1),
+                        "debt_to_equity": cand.get("debt_to_equity"),
                         "business_potential_score": business_pot,
                         "expectations_asymmetry_gap_pct": asym_gap,
                         "tape_confirmation_score": p5_price,
@@ -471,5 +472,7 @@ class ScreenerService:
         elif preset_name == "INTRADAY_MOMENTUM_SCALP_PRESET":
             req.min_market_cap_cr = 1500.0
             req.min_daily_turnover_cr = 5.0
+            req.min_roce_pct = 0.0
+            req.max_debt_to_equity = 4.0
         
         return cls.run_screen(req)

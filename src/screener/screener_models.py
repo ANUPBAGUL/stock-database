@@ -21,6 +21,7 @@ class ScreenerFilterRequest(BaseModel):
     min_sales_growth_3y_pct: float = Field(default=12.0, description="Minimum 3-Year Sales Growth (%)")
     min_pat_growth_3y_pct: float = Field(default=12.0, description="Minimum 3-Year PAT Growth (%)")
     max_debt_to_equity: float = Field(default=1.2, description="Maximum Debt/Equity Multiple")
+    max_pe_ratio: Optional[float] = Field(default=None, description="Maximum P/E Multiple")
     min_cfo_to_pat_ratio: float = Field(default=0.70, description="Minimum Cash Flow Conversion (CFO/PAT)")
     max_promoter_pledge_pct: float = Field(default=15.0, description="Maximum Promoter Pledge %")
     
@@ -141,6 +142,7 @@ class ScreenerCandidateResult(BaseModel):
     market_cap_cr: float
     pe_ratio: Optional[float] = None
     roce_pct: Optional[float] = None
+    debt_to_equity: Optional[float] = None
     
     # 4 Decoupled Orthogonal Vectors (Mauboussin / Institutional Matrix)
     business_potential_score: float = 0.0      # Score A: Long-term business quality & compounding runway (0-100)

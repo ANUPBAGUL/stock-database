@@ -539,6 +539,7 @@ class MultiHorizonFeedRouter:
             market_cap_cr=mcap,
             pe_ratio=evaluated_data.get("pe_ratio"),
             roce_pct=evaluated_data.get("roce_pct"),
+            debt_to_equity=evaluated_data.get("debt_to_equity"),
             business_potential_score=potential,
             expectations_asymmetry_gap_pct=asym_gap,
             tape_confirmation_score=tape,

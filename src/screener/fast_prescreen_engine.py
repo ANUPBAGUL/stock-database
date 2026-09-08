@@ -8,7 +8,7 @@ Stage 2: Continuous Factor Ranking & Acceleration Sieve
 """
 
 from typing import Dict, Any, List, Optional
-from datetime import date
+from datetime import date, datetime
 from sqlalchemy.orm import Session
 from sqlalchemy import func
 
@@ -45,9 +45,10 @@ class FastPreScreenEngine:
         isin_map: Dict[str, Company] = {}
         for comp in all_companies:
             # Drop synthetic test fixture companies
-            if comp.company_id.startswith("test") or (comp.nse_symbol and comp.nse_symbol.startswith("TEST")):
-                continue
-            if comp.company_name and "test" in comp.company_name.lower():
+            cid_lower = comp.company_id.lower()
+            sym_lower = (comp.nse_symbol or "").lower()
+            name_lower = (comp.company_name or "").lower()
+            if cid_lower.startswith(("test", "comp_test", "comp_audit")) or sym_lower.startswith("test") or "test" in name_lower:
                 continue
             if comp.nse_symbol in ["HDFC", "DHFL", "SINTEX", "RCOM"]:
                 continue
@@ -91,11 +92,18 @@ class FastPreScreenEngine:
 
         candidates_scored = []
         for comp in eligible_companies:
-            # Query all P&L statements sorted by date descending
+            # Query all P&L statements sorted by date descending (active records prioritized)
+            now_dt = datetime.utcnow()
             pls = db.query(BitemporalFinancial).filter(
                 BitemporalFinancial.company_id == comp.company_id,
-                BitemporalFinancial.revenue.isnot(None)
-            ).order_by(BitemporalFinancial.period_end_date.desc()).all()
+                BitemporalFinancial.revenue.isnot(None),
+                BitemporalFinancial.system_rec_end > now_dt
+            ).order_by(BitemporalFinancial.period_end_date.desc(), BitemporalFinancial.system_rec_start.desc()).all()
+            if not pls:
+                pls = db.query(BitemporalFinancial).filter(
+                    BitemporalFinancial.company_id == comp.company_id,
+                    BitemporalFinancial.revenue.isnot(None)
+                ).order_by(BitemporalFinancial.period_end_date.desc(), BitemporalFinancial.system_rec_start.desc()).all()
 
             latest_pl = pls[0] if pls else None
             # Identify 1-year prior statement for authentic YoY growth calculation (strict period_type matching)
@@ -111,8 +119,14 @@ class FastPreScreenEngine:
             # Lookback to most recent audited balance sheet (SEBI LODR Compliance)
             bss = db.query(BitemporalFinancial).filter(
                 BitemporalFinancial.company_id == comp.company_id,
-                BitemporalFinancial.net_worth.isnot(None)
-            ).order_by(BitemporalFinancial.period_end_date.desc()).all()
+                BitemporalFinancial.net_worth.isnot(None),
+                BitemporalFinancial.system_rec_end > now_dt
+            ).order_by(BitemporalFinancial.period_end_date.desc(), BitemporalFinancial.system_rec_start.desc()).all()
+            if not bss:
+                bss = db.query(BitemporalFinancial).filter(
+                    BitemporalFinancial.company_id == comp.company_id,
+                    BitemporalFinancial.net_worth.isnot(None)
+                ).order_by(BitemporalFinancial.period_end_date.desc(), BitemporalFinancial.system_rec_start.desc()).all()
             latest_bs = bss[0] if bss else None
 
             # Skip companies with no audited balance sheet — never fabricate financial primitives
@@ -146,7 +160,7 @@ class FastPreScreenEngine:
                         eq_cap = float(b.equity_share_capital)
                         break
                 if not eq_cap:
-                    eq_cap = float(getattr(comp, "equity_capital", 0.0) or 0.0)
+                    eq_cap = float(latest_bs.equity_share_capital or 0.0)
                 fv = float(getattr(comp, "face_value", 10.0) or 10.0)
                 if eq_cap > 0 and fv > 0:
                     shares = (eq_cap * 10000000.0) / fv
@@ -203,6 +217,23 @@ class FastPreScreenEngine:
             if req.min_market_cap_cr and mcap_cr < req.min_market_cap_cr:
                 continue
             if req.max_market_cap_cr and mcap_cr > req.max_market_cap_cr:
+                continue
+
+            # Strict ROCE filter
+            if req.min_roce_pct is not None and roce < req.min_roce_pct:
+                continue
+
+            # Strict Solvency / Leverage filter
+            if req.max_debt_to_equity is not None and de > req.max_debt_to_equity:
+                continue
+
+            # Strict Sales Growth filter (if requested and growth calculation exists)
+            if req.min_sales_growth_3y_pct is not None and sales_growth is not None:
+                if req.min_sales_growth_3y_pct > 0 and sales_growth < req.min_sales_growth_3y_pct:
+                    continue
+
+            # P/E ratio filter (if requested and PE is available)
+            if req.max_pe_ratio is not None and pe is not None and pe > req.max_pe_ratio:
                 continue
 
             # Continuous Factor Scoring (0 - 100 composite ranking)

@@ -143,38 +143,93 @@ class StockDossierBuilder:
             pit = db.query(QuarterlyPITState).filter(QuarterlyPITState.company_id == cid).order_by(QuarterlyPITState.quarter_end_date.desc()).first()
             market_cap_cr = round(pit.market_cap_cr, 1) if pit and pit.market_cap_cr else None
 
-            # 2. Audited Financial Statements
-            fins = (
+            # 2. Audited Financial Statements (strictly active records, avoiding superseded entries)
+            now_dt = datetime.utcnow()
+            raw_fins = (
                 db.query(BitemporalFinancial)
-                .filter(BitemporalFinancial.company_id == cid)
-                .order_by(BitemporalFinancial.period_end_date.desc())
+                .filter(
+                    BitemporalFinancial.company_id == cid,
+                    BitemporalFinancial.system_rec_end > now_dt
+                )
+                .order_by(BitemporalFinancial.period_end_date.desc(), BitemporalFinancial.system_rec_start.desc())
                 .all()
             )
 
-            latest_fin = fins[0] if fins else None
-            ttm_revenue = sum(f.revenue for f in fins[:4] if f.revenue is not None) if len(fins) >= 4 else (latest_fin.revenue if latest_fin and latest_fin.revenue else 0.0)
-            ttm_pat = sum(f.pat for f in fins[:4] if f.pat is not None) if len(fins) >= 4 else (latest_fin.pat if latest_fin and latest_fin.pat else 0.0)
-            ttm_cfo = sum(f.operating_cash_flow for f in fins[:4] if f.operating_cash_flow is not None) if len(fins) >= 4 else 0.0
+            # Fallback if no records with future system_rec_end found
+            if not raw_fins:
+                raw_fins = (
+                    db.query(BitemporalFinancial)
+                    .filter(BitemporalFinancial.company_id == cid)
+                    .order_by(BitemporalFinancial.period_end_date.desc())
+                    .all()
+                )
 
-            # 3-Year Sales & PAT Growth
+            # Deduplicate by (period_type, period_end_date)
+            deduped_fins = []
+            seen_type_date = set()
+            for f in raw_fins:
+                key = (f.period_type, f.period_end_date)
+                if key not in seen_type_date:
+                    seen_type_date.add(key)
+                    deduped_fins.append(f)
+
+            fins = deduped_fins
+            latest_fin = fins[0] if fins else None
+
+            # Strictly separate quarterly and annual filings for TTM calculations
+            quarterly_fins = [f for f in fins if f.period_type == "QUARTERLY" and f.revenue is not None]
+            annual_fins = [f for f in fins if f.period_type == "ANNUAL" and f.revenue is not None]
+
+            if len(quarterly_fins) >= 4:
+                ttm_revenue = sum(f.revenue for f in quarterly_fins[:4] if f.revenue is not None)
+                ttm_pat = sum(f.pat for f in quarterly_fins[:4] if f.pat is not None)
+                ttm_cfo = sum(f.operating_cash_flow for f in quarterly_fins[:4] if f.operating_cash_flow is not None)
+            elif annual_fins:
+                latest_ann = annual_fins[0]
+                ttm_revenue = latest_ann.revenue or 0.0
+                ttm_pat = latest_ann.pat or 0.0
+                ttm_cfo = latest_ann.operating_cash_flow or 0.0
+            elif quarterly_fins:
+                scale = 4.0 / len(quarterly_fins)
+                ttm_revenue = sum(f.revenue for f in quarterly_fins if f.revenue is not None) * scale
+                ttm_pat = sum(f.pat for f in quarterly_fins if f.pat is not None) * scale
+                ttm_cfo = sum(f.operating_cash_flow for f in quarterly_fins if f.operating_cash_flow is not None) * scale
+            else:
+                ttm_revenue = latest_fin.revenue if latest_fin and latest_fin.revenue else 0.0
+                ttm_pat = latest_fin.pat if latest_fin and latest_fin.pat else 0.0
+                ttm_cfo = 0.0
+
+            # 3-Year Sales & PAT Growth: strictly compare with filing 3 years prior (1000 to 1250 days)
             sales_growth_3y = None
             pat_growth_3y = None
-            if len(fins) >= 12 and fins[0].revenue and fins[11].revenue and fins[11].revenue > 0:
-                sales_growth_3y = round((((fins[0].revenue / fins[11].revenue) ** (1 / 3.0)) - 1.0) * 100.0, 1)
-            if len(fins) >= 12 and fins[0].pat and fins[11].pat and fins[11].pat > 0:
-                pat_growth_3y = round((((fins[0].pat / fins[11].pat) ** (1 / 3.0)) - 1.0) * 100.0, 1)
+            base_filing_3y = None
+
+            # Look back in annual filings first (most reliable 3Y CAGR)
+            if len(annual_fins) >= 4:
+                for a in annual_fins[1:]:
+                    diff_days = (annual_fins[0].period_end_date - a.period_end_date).days
+                    if 1000 <= diff_days <= 1250:
+                        base_filing_3y = a
+                        break
+                if base_filing_3y and annual_fins[0].revenue and base_filing_3y.revenue and base_filing_3y.revenue > 0:
+                    sales_growth_3y = round((((annual_fins[0].revenue / base_filing_3y.revenue) ** (1 / 3.0)) - 1.0) * 100.0, 1)
+                if base_filing_3y and annual_fins[0].pat and base_filing_3y.pat and base_filing_3y.pat > 0:
+                    pat_growth_3y = round((((annual_fins[0].pat / base_filing_3y.pat) ** (1 / 3.0)) - 1.0) * 100.0, 1)
+
+            # If not found from annual filings, look back in quarterly filings (12 quarters prior)
+            if sales_growth_3y is None and len(quarterly_fins) >= 12:
+                for q in quarterly_fins[4:]:
+                    diff_days = (quarterly_fins[0].period_end_date - q.period_end_date).days
+                    if 1000 <= diff_days <= 1250:
+                        base_filing_3y = q
+                        break
+                if base_filing_3y and quarterly_fins[0].revenue and base_filing_3y.revenue and base_filing_3y.revenue > 0:
+                    sales_growth_3y = round((((quarterly_fins[0].revenue / base_filing_3y.revenue) ** (1 / 3.0)) - 1.0) * 100.0, 1)
+                if base_filing_3y and quarterly_fins[0].pat and base_filing_3y.pat and base_filing_3y.pat > 0:
+                    pat_growth_3y = round((((quarterly_fins[0].pat / base_filing_3y.pat) ** (1 / 3.0)) - 1.0) * 100.0, 1)
 
             # 2b. Quarterly Operating Leverage & Margin Trajectory (Chronological Last 5 Quarters)
-            quarterly_fins = [f for f in fins if f.period_type == "QUARTERLY"]
-            if len(quarterly_fins) < 3:
-                quarterly_fins = fins
-
-            seen_dates = set()
-            unique_quarterly = []
-            for f in quarterly_fins:
-                if f.period_end_date not in seen_dates:
-                    seen_dates.add(f.period_end_date)
-                    unique_quarterly.append(f)
+            unique_quarterly = [f for f in fins if f.period_type == "QUARTERLY"]
 
             recent_quarters = sorted(unique_quarterly[:5], key=lambda x: x.period_end_date)
             quarterly_trajectory = []

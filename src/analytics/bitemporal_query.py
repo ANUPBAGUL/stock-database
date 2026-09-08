@@ -51,13 +51,16 @@ class BitemporalQueryEngine:
                 BitemporalFinancial.system_rec_end > as_of_dt
             )
 
-        # Order by period_end_date desc, publication_date desc
+        # Order by period_end_date desc, publication_date desc, system_rec_end desc, system_rec_start desc
+        # Ensuring active records (system_rec_end=9999-12-31) take strict precedence over superseded records
         records = query.order_by(
             BitemporalFinancial.period_end_date.desc(),
-            BitemporalFinancial.publication_date.desc()
+            BitemporalFinancial.publication_date.desc(),
+            BitemporalFinancial.system_rec_end.desc(),
+            BitemporalFinancial.system_rec_start.desc()
         ).all()
 
-        # Deduplicate to pick the latest published version for each distinct period_end_date
+        # Deduplicate to pick the latest active/published version for each distinct period_end_date
         deduped: List[BitemporalFinancial] = []
         seen_periods = set()
         for rec in records:
