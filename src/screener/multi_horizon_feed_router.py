@@ -445,48 +445,72 @@ class MultiHorizonFeedRouter:
             broker_order_ticket=intra_ticket
         )
 
-        # 4. Automated 3-Point Invalidation Guardrails (Thesis Killers) - Stock Specific
-        # opm_pct and dso_days are authentic per-stock values from the live TradingView scanner;
-        # they will be None only if the API returned no data for that column — never silently substituted.
-        opm_raw = evaluated_data.get("opm_pct")
-        dso_raw = evaluated_data.get("dso_days")
+        # 4. Automated 3-Point Invalidation Guardrails (Thesis Killers) - Stock Specific & Sector-Aware
+        # Checks whether the candidate is a financial entity (banks/NBFCs) vs non-financial industrial/tech
+        is_fin_candidate = (evaluated_data.get("sector_category") == "FINANCIALS" or evaluated_data.get("is_financial") is True)
         support_raw = evaluated_data.get("support_price_50d")
         support_price = float(support_raw) if support_raw is not None else None
-
-        if opm_raw is not None:
-            opm = float(opm_raw)
-            opm_trigger_val = f"OPM < {round(opm - 2.5, 1)}%" if opm > 5.0 else f"OPM < {round(opm * 0.7, 1)}%"
-        else:
-            opm_trigger_val = "OPM contracts materially vs prior year (data pending)"
-
-        if dso_raw is not None:
-            dso = float(dso_raw)
-            dso_trigger_val = f"DSO > {round(dso + 15)} Days"
-        else:
-            dso_trigger_val = "Working capital DSO deteriorates sharply vs 2Q avg (data pending)"
-
         support_trigger_val = f"Close < Rs.{support_price:.2f}" if support_price is not None else "Close breaks down below trailing 50-day structural support (tape pending)"
 
-        invalidation_triggers = [
-            InvalidationTrigger(
-                trigger_id=f"{sym}_INV_1",
-                condition_description="Quarterly operating margin (OPM) compresses by > 150 bps YoY",
-                threshold_value=opm_trigger_val,
-                severity="CRITICAL"
-            ),
-            InvalidationTrigger(
-                trigger_id=f"{sym}_INV_2",
-                condition_description="Working capital DSO surges > 15 days in trailing 2 quarters",
-                threshold_value=dso_trigger_val,
-                severity="HIGH"
-            ),
-            InvalidationTrigger(
-                trigger_id=f"{sym}_INV_3",
-                condition_description="Weekly price closes below trailing 50-day/week support",
-                threshold_value=support_trigger_val,
-                severity="CRITICAL"
-            )
-        ]
+        if is_fin_candidate:
+            roe_val = evaluated_data.get("roce_pct") or 15.0
+            roe_threshold = max(10.0, round(roe_val - 3.0, 1))
+            invalidation_triggers = [
+                InvalidationTrigger(
+                    trigger_id=f"{sym}_INV_1",
+                    condition_description="Asset Quality: Gross NPA / Slippages surge > 50 bps YoY",
+                    threshold_value="GNPA > 3.0% or Credit Cost > 1.5%",
+                    severity="CRITICAL"
+                ),
+                InvalidationTrigger(
+                    trigger_id=f"{sym}_INV_2",
+                    condition_description="Profitability: Return on Equity (ROE) compresses by > 300 bps",
+                    threshold_value=f"ROE < {roe_threshold}%",
+                    severity="HIGH"
+                ),
+                InvalidationTrigger(
+                    trigger_id=f"{sym}_INV_3",
+                    condition_description="Weekly price closes below trailing 50-day/week support",
+                    threshold_value=support_trigger_val,
+                    severity="CRITICAL"
+                )
+            ]
+        else:
+            opm_raw = evaluated_data.get("opm_pct")
+            dso_raw = evaluated_data.get("dso_days")
+
+            if opm_raw is not None:
+                opm = float(opm_raw)
+                opm_trigger_val = f"OPM < {round(opm - 1.5, 1)}%" if opm > 3.0 else f"OPM < {round(opm * 0.7, 1)}%"
+            else:
+                opm_trigger_val = "OPM contracts materially > 150 bps vs prior year (data pending)"
+
+            if dso_raw is not None:
+                dso = float(dso_raw)
+                dso_trigger_val = f"DSO > {round(dso + 15)} Days"
+            else:
+                dso_trigger_val = "Working capital DSO deteriorates > 15 days vs 2Q avg (data pending)"
+
+            invalidation_triggers = [
+                InvalidationTrigger(
+                    trigger_id=f"{sym}_INV_1",
+                    condition_description="Quarterly operating margin (OPM) compresses by > 150 bps YoY",
+                    threshold_value=opm_trigger_val,
+                    severity="CRITICAL"
+                ),
+                InvalidationTrigger(
+                    trigger_id=f"{sym}_INV_2",
+                    condition_description="Working capital DSO surges > 15 days in trailing 2 quarters",
+                    threshold_value=dso_trigger_val,
+                    severity="HIGH"
+                ),
+                InvalidationTrigger(
+                    trigger_id=f"{sym}_INV_3",
+                    condition_description="Weekly price closes below trailing 50-day/week support",
+                    threshold_value=support_trigger_val,
+                    severity="CRITICAL"
+                )
+            ]
 
         # 5. Candidate Confidence Decomposition (Phase 5)
         calib_data = _get_calibration_data()
@@ -540,6 +564,8 @@ class MultiHorizonFeedRouter:
             pe_ratio=evaluated_data.get("pe_ratio"),
             roce_pct=evaluated_data.get("roce_pct"),
             debt_to_equity=evaluated_data.get("debt_to_equity"),
+            sector_category=evaluated_data.get("sector_category"),
+            high_52w=evaluated_data.get("high_52w"),
             business_potential_score=potential,
             expectations_asymmetry_gap_pct=asym_gap,
             tape_confirmation_score=tape,
@@ -554,6 +580,7 @@ class MultiHorizonFeedRouter:
             setup_grade=setup_grade,
             conditional_p_1r_pct=cond_p_1r,
             multibagger_conviction_score=score,
+            swing_readiness_score=evaluated_data.get("swing_readiness_score"),
             economic_inflection_p1=p1,
             reinvestment_runway_p2=evaluated_data.get("reinvestment_runway_p2", 80.0),
             working_capital_p3=p3,

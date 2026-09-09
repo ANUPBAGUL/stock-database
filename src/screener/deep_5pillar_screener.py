@@ -103,8 +103,6 @@ class Deep5PillarScreener:
         # ---------------------------------------------------------------------
         # 1. Pillar 1: Economic ROIC Engine (NOPAT / Invested Capital & ROIIC)
         # ---------------------------------------------------------------------
-        ebit = float(pit.get("ttm_ebit")) if pit.get("ttm_ebit") is not None else float((latest_fin.ebit) if (latest_fin and latest_fin.ebit) else 0.0)
-
         # Detect semi-annual vs quarterly cadence
         periods_per_year = 4
         q_filings = [f for f in filings if f.period_type == "QUARTERLY"]
@@ -118,9 +116,22 @@ class Deep5PillarScreener:
             except Exception:
                 pass
 
-        # Ensure annualized revenue rate for Pillar 1 and Pillar 3
+        # Authentic TTM EBIT: Prefer PIT snapshot, else 4Q rolling sum, else annualized latest quarter
+        if pit.get("ttm_ebit") is not None:
+            ebit = float(pit.get("ttm_ebit"))
+        elif q_filings and len(q_filings) >= 4:
+            ebit = float(sum(float(f.ebit or 0.0) for f in q_filings[-4:]))
+        elif latest_fin and latest_fin.ebit:
+            ebit_val = float(latest_fin.ebit)
+            ebit = ebit_val * periods_per_year if latest_fin.period_type == "QUARTERLY" else ebit_val
+        else:
+            ebit = 0.0
+
+        # Authentic TTM Revenue for Pillar 1 and Pillar 3
         if pit.get("ttm_revenue") is not None:
             sales_curr = float(pit.get("ttm_revenue"))
+        elif q_filings and len(q_filings) >= 4:
+            sales_curr = float(sum(float(f.revenue or 0.0) for f in q_filings[-4:]))
         elif latest_fin and latest_fin.revenue:
             sales_val = float(latest_fin.revenue)
             sales_curr = sales_val * periods_per_year if latest_fin.period_type == "QUARTERLY" else sales_val

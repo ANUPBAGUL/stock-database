@@ -52,6 +52,12 @@ class QuarterlyPITBuilder:
         if not filings:
             return []
 
+        # Also fetch all annual audited filings (which contain audited Balance Sheets and Cash Flows)
+        annual_filings = db.query(BitemporalFinancial).filter(
+            BitemporalFinancial.company_id == company_id,
+            BitemporalFinancial.period_type == "ANNUAL"
+        ).order_by(BitemporalFinancial.period_end_date.asc()).all()
+
         # Deduplicate to latest publication per quarter_end_date
         deduped = {}
         for f in filings:
@@ -73,7 +79,19 @@ class QuarterlyPITBuilder:
             t0_price = price_rec.close_price if price_rec else None
             shares = curr_f.shares_outstanding
 
-            # If shares missing, attempt equity capital / face value derivation (never net_worth)
+            # If shares missing on quarterly filing, resolve from annual filings or equity capital / face value
+            if not shares or shares <= 0:
+                for af in reversed(annual_filings):
+                    if af.publication_date <= pub_ts and af.period_end_date <= q_date:
+                        if af.shares_outstanding and af.shares_outstanding > 0:
+                            shares = af.shares_outstanding
+                            break
+                        elif getattr(af, "equity_share_capital", None):
+                            comp = db.query(Company).filter_by(company_id=company_id).first()
+                            fv = getattr(comp, "face_value", 10.0) or 10.0
+                            shares = (af.equity_share_capital * 10_000_000.0) / fv if fv > 0 else None
+                            break
+
             if (not shares or shares <= 0) and getattr(curr_f, "equity_share_capital", None):
                 comp = db.query(Company).filter_by(company_id=company_id).first()
                 fv = getattr(comp, "face_value", 10.0) or 10.0
@@ -142,7 +160,92 @@ class QuarterlyPITBuilder:
             elif nw and (nw + debt) > 0:
                 ce = nw + debt
 
+            # If interim quarter without balance sheet, look back to latest annual or prior balance sheet
+            if ce is None:
+                for af in reversed(annual_filings):
+                    if af.publication_date <= pub_ts and af.period_end_date <= q_date:
+                        af_ta = af.total_assets
+                        af_cl = getattr(af, "current_liabilities", None)
+                        af_nw = af.net_worth
+                        af_debt = af.total_debt or 0.0
+                        if af_ta and af_cl and (af_ta - af_cl) > 0:
+                            ce = af_ta - af_cl
+                            if not nw: nw = af_nw
+                            if not debt: debt = af_debt
+                            break
+                        elif af_nw and (af_nw + af_debt) > 0:
+                            ce = af_nw + af_debt
+                            if not nw: nw = af_nw
+                            if not debt: debt = af_debt
+                            break
+
+                if ce is None:
+                    for past_q in reversed(sorted_quarters[:i]):
+                        past_f = deduped[past_q]
+                        p_ta = past_f.total_assets
+                        p_cl = getattr(past_f, "current_liabilities", None)
+                        p_nw = past_f.net_worth
+                        p_debt = past_f.total_debt or 0.0
+                        if p_ta and p_cl and (p_ta - p_cl) > 0:
+                            ce = p_ta - p_cl
+                            if not nw: nw = p_nw
+                            if not debt: debt = p_debt
+                            break
+                        elif p_nw and (p_nw + p_debt) > 0:
+                            ce = p_nw + p_debt
+                            if not nw: nw = p_nw
+                            if not debt: debt = p_debt
+                            break
+
             roce = round((ttm_ebit / ce) * 100.0, 2) if (ttm_ebit and ce and ce > 0) else None
+            nopat = ttm_ebit * 0.7483 if ttm_ebit is not None else None
+            roic = round((nopat / ce) * 100.0, 2) if (nopat is not None and ce and ce > 0) else None
+            pe = round(mcap / ttm_pat, 2) if (mcap and ttm_pat and ttm_pat > 0) else None
+
+            # Shareholding pattern lookup as of publication timestamp
+            sh = db.query(ShareholdingHistory).filter(
+                ShareholdingHistory.company_id == company_id,
+                ShareholdingHistory.period_end_date <= q_date,
+                ShareholdingHistory.publication_timestamp <= pub_ts
+            ).order_by(ShareholdingHistory.period_end_date.desc()).first()
+
+            promoter_h = sh.promoter_holding_pct if sh else None
+            promoter_p = sh.promoter_pledge_pct if sh else None
+            inst_h = None
+            if sh:
+                inst_sum = (sh.fii_holding_pct or 0.0) + (sh.dii_holding_pct or 0.0)
+                if sh.fii_holding_pct is not None or sh.dii_holding_pct is not None:
+                    inst_h = round(inst_sum, 2)
+
+            # Cash flow and reinvestment metrics
+            ocf_val = curr_f.operating_cash_flow
+            capex_val = curr_f.capex
+            if ocf_val is None or capex_val is None:
+                for af in reversed(annual_filings):
+                    if af.publication_date <= pub_ts and af.period_end_date <= q_date:
+                        if af.operating_cash_flow is not None and af.capex is not None:
+                            ocf_val = af.operating_cash_flow
+                            capex_val = af.capex
+                            break
+
+                if ocf_val is None or capex_val is None:
+                    for past_q in reversed(sorted_quarters[:i]):
+                        past_f = deduped[past_q]
+                        if past_f.operating_cash_flow is not None and past_f.capex is not None:
+                            ocf_val = past_f.operating_cash_flow
+                            capex_val = past_f.capex
+                            break
+
+            fcf_conversion = None
+            reinvestment_rate = None
+            if ocf_val is not None and capex_val is not None:
+                fcf_calc = ocf_val - capex_val
+                if ttm_pat and ttm_pat > 0:
+                    fcf_conversion = round((fcf_calc / ttm_pat) * 100.0, 2)
+                if nopat and nopat > 0:
+                    reinvestment_rate = round(min(150.0, max(0.0, (capex_val / nopat) * 100.0)), 2)
+
+            dte = round(debt / nw, 2) if (nw and nw > 0) else None
 
             # 4. Lifecycle Classification
             lifecycle = LifecycleClassifier.classify_company_stage(
@@ -153,8 +256,42 @@ class QuarterlyPITBuilder:
                 pat_growth_yoy_pct=pat_growth_yoy if pat_growth_yoy is not None else 15.0,
                 roce_pct=roce if roce is not None else 15.0,
                 roce_delta_bps=50.0,
-                institutional_stake_pct=10.0
+                institutional_stake_pct=inst_h if inst_h is not None else 10.0
             )
+
+            # Model M6 Conviction scoring
+            m6_score = None
+            m6_verdict = None
+            try:
+                from src.ai.m6_frozen import M6FrozenResearchModel
+                fin_feat = {
+                    "ttm_revenue": ttm_rev,
+                    "revenue_yoy_growth_pct": rev_growth_yoy,
+                    "pat_yoy_growth_pct": pat_growth_yoy,
+                    "ebitda_margin": ebitda_margin,
+                    "pat_margin": pat_margin,
+                    "roce_pct": roce,
+                    "debt_to_equity": dte,
+                }
+                pr_feat = {"pe_ratio": pe}
+                gov_feat = {
+                    "promoter_holding_pct": promoter_h if promoter_h is not None else 50.0,
+                    "pledge_pct": promoter_p if promoter_p is not None else 0.0,
+                }
+                m6_eval = M6FrozenResearchModel.score_company(
+                    company_id=company_id,
+                    symbol="",
+                    as_of_date=pub_ts.date(),
+                    financial_features=fin_feat,
+                    price_features=pr_feat,
+                    governance_features=gov_feat,
+                    macro_regime="EXPANSION"
+                )
+                m6_score = m6_eval.get("m6_conviction_score")
+                if m6_score is not None:
+                    m6_verdict = "HIGH_CONVICTION" if m6_score >= 70 else ("NEUTRAL" if m6_score >= 50 else "UNDERPERFORM")
+            except Exception:
+                pass
 
             # 5. Forward Price Realization post publication (Split-adjusted continuous prices)
             future_prices = PriceAdjuster.get_adjusted_prices(
@@ -212,8 +349,6 @@ class QuarterlyPITBuilder:
                 quarter_end_date=q_date
             ).first()
 
-            dte = round((curr_f.total_debt or 0.0) / curr_f.net_worth, 2) if (curr_f.net_worth and curr_f.net_worth > 0) else None
-
             if not existing:
                 q_state = QuarterlyPITState(
                     company_id=company_id,
@@ -228,9 +363,18 @@ class QuarterlyPITBuilder:
                     ebitda_margin_pct=ebitda_margin,
                     pat_margin_pct=pat_margin,
                     roce_pct=roce,
+                    roic_pct=roic,
+                    reinvestment_rate_pct=reinvestment_rate,
+                    fcf_to_pat_conversion_pct=fcf_conversion,
                     debt_to_equity=dte,
+                    pe_ratio=pe,
+                    promoter_holding_pct=promoter_h,
+                    promoter_pledge_pct=promoter_p,
+                    institutional_holding_pct=inst_h,
                     lifecycle_stage=lifecycle["stage"],
-                    raw_feature_vector_payload={"roce": roce, "rev_growth": rev_growth_yoy, "mcap": mcap},
+                    m6_score=m6_score,
+                    m6_verdict=m6_verdict,
+                    raw_feature_vector_payload={"roce": roce, "rev_growth": rev_growth_yoy, "mcap": mcap, "pe": pe, "roic": roic},
                     fwd_return_1q_pct=fwd_1q,
                     fwd_return_2q_pct=fwd_2q,
                     fwd_return_4q_pct=fwd_4q,
@@ -246,14 +390,38 @@ class QuarterlyPITBuilder:
                 db.add(q_state)
                 created_states.append(q_state)
             else:
+                existing.financial_id = curr_f.financial_id
                 existing.market_cap_cr = round(mcap, 2) if mcap else existing.market_cap_cr
+                existing.revenue_ttm_cr = round(ttm_rev, 2) if ttm_rev else existing.revenue_ttm_cr
+                existing.revenue_growth_yoy_pct = rev_growth_yoy
+                existing.ebitda_growth_yoy_pct = ebitda_growth_yoy
+                existing.pat_growth_yoy_pct = pat_growth_yoy
+                existing.ebitda_margin_pct = ebitda_margin
+                existing.pat_margin_pct = pat_margin
                 existing.roce_pct = roce
+                existing.roic_pct = roic
+                existing.reinvestment_rate_pct = reinvestment_rate
+                existing.fcf_to_pat_conversion_pct = fcf_conversion
+                existing.debt_to_equity = dte
+                existing.pe_ratio = pe
+                existing.promoter_holding_pct = promoter_h
+                existing.promoter_pledge_pct = promoter_p
+                existing.institutional_holding_pct = inst_h
                 existing.lifecycle_stage = lifecycle["stage"]
+                existing.m6_score = m6_score
+                existing.m6_verdict = m6_verdict
+                existing.raw_feature_vector_payload = {"roce": roce, "rev_growth": rev_growth_yoy, "mcap": mcap, "pe": pe, "roic": roic}
+                existing.fwd_return_1q_pct = fwd_1q
+                existing.fwd_return_2q_pct = fwd_2q
+                existing.fwd_return_4q_pct = fwd_4q
+                existing.fwd_return_8q_pct = fwd_8q
+                existing.fwd_return_12q_pct = fwd_12q
                 existing.is_multibagger_2x = is_2x
                 existing.is_multibagger_5x = is_5x
                 existing.is_multibagger_10x = is_10x
                 existing.fwd_max_run_pct = max_run
                 existing.fwd_max_drawdown_pct = max_dd
+                existing.is_failure = (max_dd <= -50.0 and not is_2x)
                 created_states.append(existing)
 
         db.commit()

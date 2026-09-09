@@ -63,19 +63,40 @@ class FailureAnalyzer:
 
         if latest_filing:
             # Check for ROCE deterioration
-            if latest_filing.ebit and latest_filing.total_assets and latest_filing.current_liabilities:
-                ce = max(50.0, latest_filing.total_assets - latest_filing.current_liabilities)
-                realized_roce = round((latest_filing.ebit / ce) * 100.0, 2)
-                
-                if realized_roce < (expected_roce - 10.0):
-                    primary_reason = "ROCE_DETERIORATION"
-                    evidence_list.append({
-                        "metric": "ROCE",
-                        "expected_pct": expected_roce,
-                        "realized_pct": realized_roce,
-                        "delta_bps": int((realized_roce - expected_roce) * 100)
-                    })
-                    post_mortem_notes = f"ROCE collapsed from {expected_roce}% at T0 to {realized_roce}%, destroying returns on incremental capital."
+            ebit_val = latest_filing.ebit
+            if ebit_val is not None:
+                is_quarterly = getattr(latest_filing, "period_type", "QUARTERLY") == "QUARTERLY" or getattr(latest_filing, "period_type", None) is None
+                ebit_annualized = (ebit_val * 4.0) if is_quarterly else ebit_val
+
+                ce = None
+                if latest_filing.total_assets and latest_filing.current_liabilities:
+                    ce = max(50.0, latest_filing.total_assets - latest_filing.current_liabilities)
+                elif latest_filing.net_worth and (latest_filing.net_worth + (latest_filing.total_debt or 0.0)) > 0:
+                    ce = max(50.0, latest_filing.net_worth + (latest_filing.total_debt or 0.0))
+                else:
+                    # Look back to latest available audited balance sheet for CE
+                    past_bs = db.query(BitemporalFinancial).filter(
+                        BitemporalFinancial.company_id == snapshot.company_id,
+                        BitemporalFinancial.period_end_date <= latest_filing.period_end_date,
+                        BitemporalFinancial.total_assets.isnot(None)
+                    ).order_by(BitemporalFinancial.period_end_date.desc()).first()
+                    if past_bs and past_bs.total_assets and past_bs.current_liabilities:
+                        ce = max(50.0, past_bs.total_assets - past_bs.current_liabilities)
+                    elif past_bs and past_bs.net_worth and (past_bs.net_worth + (past_bs.total_debt or 0.0)) > 0:
+                        ce = max(50.0, past_bs.net_worth + (past_bs.total_debt or 0.0))
+
+                if ce and ce > 0:
+                    realized_roce = round((ebit_annualized / ce) * 100.0, 2)
+                    
+                    if realized_roce < (expected_roce - 10.0):
+                        primary_reason = "ROCE_DETERIORATION"
+                        evidence_list.append({
+                            "metric": "ROCE",
+                            "expected_pct": expected_roce,
+                            "realized_pct": realized_roce,
+                            "delta_bps": int((realized_roce - expected_roce) * 100)
+                        })
+                        post_mortem_notes = f"ROCE collapsed from {expected_roce}% at T0 to {realized_roce}%, destroying returns on incremental capital."
 
             # Check for debt explosion
             if latest_filing.total_debt and latest_filing.net_worth:

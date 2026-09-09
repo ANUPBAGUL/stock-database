@@ -1,7 +1,7 @@
 import uuid
 from datetime import date, datetime
 from typing import Optional
-from sqlalchemy import String, Date, DateTime, Float, Integer, ForeignKey, Index
+from sqlalchemy import String, Date, DateTime, Float, Integer, ForeignKey, Index, Boolean
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from src.db.base import Base
 
@@ -54,6 +54,7 @@ class DailyPriceRaw(Base):
     quote_type: Mapped[str] = mapped_column(String(16), default="CLOSE")     # LTP, CLOSE, VWAP, OPEN, HIGH, LOW
     price_source: Mapped[str] = mapped_column(String(32), default="NSE_EOD") # UPSTOX_API, NSE_EOD, YFINANCE, BSE_EOD
     quote_timestamp: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)  # Precise IST intraday timestamp
+    is_split_adjusted: Mapped[bool] = mapped_column(Boolean, default=False)
 
     open_price: Mapped[float] = mapped_column(Float, nullable=False)
     high_price: Mapped[float] = mapped_column(Float, nullable=False)

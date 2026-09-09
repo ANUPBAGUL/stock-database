@@ -8,7 +8,7 @@ This platform is a quantitative and fundamental equity intelligence engine desig
 
 ## 🧭 Documentation Navigation Map
 
-This manual is divided into 7 focused, comprehensive volumes:
+This manual is divided into 8 focused, comprehensive volumes:
 
 | Volume | Document | Description |
 | :--- | :--- | :--- |
@@ -19,6 +19,7 @@ This manual is divided into 7 focused, comprehensive volumes:
 | **05** | [**Stock Discovery & Screener Playbook**](file:///d:/Projects/Stock_Watchlist_Hub/Documentation/05_STOCK_DISCOVERY_AND_SCREENER_PLAYBOOK.md) | Sub-80ms quantamental prescreener, the 4 market-regime presets, `MultiHorizonFeedRouter` 4-vector matrix, and India VIX macro sizing overrides. |
 | **06** | [**Institutional Invariants & LLM Analyst**](file:///d:/Projects/Stock_Watchlist_Hub/Documentation/06_INSTITUTIONAL_INVARIANTS_AND_LLM_ANALYST.md) | The 10-layer institutional validation framework (Layers A–J) and anti-hallucinating LLM Analyst Copilot. |
 | **07** | [**Operations, Hosting & Maintenance**](file:///d:/Projects/Stock_Watchlist_Hub/Documentation/07_OPERATIONS_HOSTING_AND_MAINTENANCE.md) | 1-click Windows scripts (`start_hub.bat`, `stop_hub.bat`), Ngrok remote tunneling, Upstox OAuth flow, and troubleshooting. |
+| **08** | [**Adaptive Market Strategy Matrix & Continuation Radar**](file:///d:/Projects/Stock_Watchlist_Hub/Documentation/08_ADAPTIVE_MARKET_MATRIX_AND_CONTINUATION_RADAR.md) | Top-down CMMI market mood index, dynamic TradingView filter synthesis, official NSE delivery bhavcopy ingestion, CLV/FSAR/Elasticity quant engine, Upper Circuit freeze sentinel, and 9:15 AM ORB-15 execution playbooks. |
 
 
 ---

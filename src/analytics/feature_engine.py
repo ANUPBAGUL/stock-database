@@ -290,15 +290,20 @@ class FeatureEngine:
             features["net_cash_position"] = round(-net_debt, 2)  # positive = net cash, negative = net debt
 
             # ── Free Cash Flow TTM (OCF - CapEx) ──
+            features["ttm_ocf"] = round(ttm_ocf, 2) if ttm_ocf is not None else None
+            features["ttm_capex"] = round(ttm_capex, 2) if ttm_capex is not None else None
             if ttm_fcf is not None:
                 features["ttm_fcf"] = round(ttm_fcf, 2)
-                features["ocf_to_pat"] = round(ttm_ocf / ttm_pat, 2) if (ttm_ocf is not None and ttm_pat and ttm_pat > 0) else None
             elif ttm_ocf is not None:
                 features["ttm_fcf"] = round(ttm_ocf - (ttm_capex or 0.0), 2)
-                features["ocf_to_pat"] = round(ttm_ocf / ttm_pat, 2) if ttm_pat > 0 else None
             else:
                 features["ttm_fcf"] = None
-                features["ocf_to_pat"] = None
+
+            features["ocf_to_pat"] = round(ttm_ocf / ttm_pat, 2) if (ttm_ocf is not None and ttm_pat and ttm_pat > 0) else None
+            if features["ttm_fcf"] is not None and ttm_pat and ttm_pat > 0:
+                features["fcf_to_pat_conversion_pct"] = round((features["ttm_fcf"] / ttm_pat) * 100.0, 2)
+            else:
+                features["fcf_to_pat_conversion_pct"] = None
 
             features["shares_outstanding"] = q0.shares_outstanding
             features["consolidation_scope"] = getattr(q0, 'consolidation_scope', 'CONSOLIDATED')
@@ -356,7 +361,10 @@ class FeatureEngine:
                     "roce_methodology": "ANNUAL_AUDITED_BS",
                     "roce_quarantine_flag": (calc_roce is None),
                     "roce_raw_inputs": {"ttm_ebit": a_ebit, "cap_employed_avg": ce_avg, "methodology": "ANNUAL_AUDITED_BS"},
+                    "ttm_ocf": round(a_cfo, 2) if a_cfo is not None else None,
+                    "ttm_capex": round(a_capex, 2) if a_capex is not None else None,
                     "ttm_fcf": round(a_fcf, 2) if a_fcf is not None else None,
+                    "fcf_to_pat_conversion_pct": round((a_fcf / a_pat) * 100.0, 2) if (a_fcf is not None and a_pat and a_pat > 0) else None,
                     "fcf_yield_pct": None,
                     "ttm_fcf_yield_pct": None,
                     "ocf_to_pat": round(a_cfo / a_pat, 2) if (a_cfo and a_pat and a_pat > 0) else None,
@@ -373,7 +381,9 @@ class FeatureEngine:
                     "net_worth": None,
                     "debt_to_equity": None, "debt_to_ebitda": None, "net_cash_position": None,
                     "roce_pct": None, "roce_methodology": "UNAVAILABLE", "roce_quarantine_flag": True,
-                    "roce_raw_inputs": None, "ttm_fcf": None, "fcf_yield_pct": None, "ttm_fcf_yield_pct": None, "ocf_to_pat": None,
+                    "roce_raw_inputs": None,
+                    "ttm_ocf": None, "ttm_capex": None, "ttm_fcf": None, "fcf_to_pat_conversion_pct": None,
+                    "fcf_yield_pct": None, "ttm_fcf_yield_pct": None, "ocf_to_pat": None,
                     "shares_outstanding": None, "consolidation_scope": None,
                     "ttm_consolidation_scope_flag": None
                 })

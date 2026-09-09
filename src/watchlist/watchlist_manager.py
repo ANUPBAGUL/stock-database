@@ -866,6 +866,46 @@ class WatchlistManager:
                         latent_res = LatentUpsideEngine.calculate_latent_upside_map(rev, ebit, pat or 0.0, mcap, roce_val)
                         coords_res = LifecycleClassifier.calculate_continuous_lifecycle_coordinates(mcap, rev_growth_val or 0.0, pat_growth_val or 0.0, roce_val, 10.0, pe or 25.0)
 
+                        from src.analytics.bitemporal_query import BitemporalQueryEngine
+                        recent_financials = BitemporalQueryEngine.get_financials_as_of(
+                            db, company.company_id, datetime.utcnow(), period_type="QUARTERLY", limit=8
+                        )
+                        q_records = [
+                            {
+                                "period_end_date": getattr(f, "period_end_date", None),
+                                "revenue": getattr(f, "revenue", None),
+                                "ebit": getattr(f, "ebit", None),
+                                "pat": getattr(f, "pat", None),
+                            }
+                            for f in (recent_financials or [])
+                        ]
+                        accel_res = EarningsAccelerationEngine.calculate_acceleration_vector(q_records) if len(q_records) >= 6 else {
+                            "acceleration_status": "INSUFFICIENT_HISTORY",
+                            "revenue_acceleration_pct_points": 0.0,
+                            "pat_acceleration_pct_points": 0.0,
+                            "acceleration_persistence_quarters": 0
+                        }
+
+                        sh_records = [
+                            {
+                                "period_end_date": getattr(s, "period_end_date", None),
+                                "fii_holding_pct": getattr(s, "fii_holding_pct", 0.0),
+                                "dii_holding_pct": getattr(s, "dii_holding_pct", 0.0),
+                                "promoter_holding_pct": getattr(s, "promoter_holding_pct", 0.0),
+                            }
+                            for s in (company.shareholding_history or [])
+                        ]
+                        vel_res = OwnershipVelocityEngine.calculate_ownership_velocity(sh_records) if len(sh_records) >= 2 else {
+                            "velocity_status": "INSUFFICIENT_HISTORY",
+                            "inst_1q_delta_pct": 0.0,
+                            "inst_1y_delta_pct": 0.0,
+                            "institutional_velocity_trend": "FLAT"
+                        }
+                        current_inst = (
+                            ((sh_records[-1].get("fii_holding_pct") or 0.0) + (sh_records[-1].get("dii_holding_pct") or 0.0))
+                            if sh_records else (pit_features.get("institutional_holding_pct") or 0.0)
+                        )
+
                         from src.analytics.canonical_hasher import compute_canonical_hash
                         in_h = compute_canonical_hash(pit_features)
                         out_h = compute_canonical_hash(coords_res)
@@ -902,8 +942,22 @@ class WatchlistManager:
                                 required_10x_niche_share_pct=tam_res["required_niche_market_share_pct"],
                                 tam_feasibility=tam_res["feasibility"],
                                 is_10x_plausible=tam_res["is_10x_plausible"],
+                                revenue_accel_pct_points=accel_res.get("revenue_acceleration_pct_points"),
+                                pat_accel_pct_points=accel_res.get("pat_acceleration_pct_points"),
+                                accel_persistence_quarters=accel_res.get("acceleration_persistence_quarters", 0),
+                                accel_confidence=accel_res.get("acceleration_status"),
+                                accel_status=accel_res.get("acceleration_status"),
+                                current_inst_pct=current_inst,
+                                inst_1q_delta_pct=vel_res.get("inst_1q_delta_pct"),
+                                inst_1y_delta_pct=vel_res.get("inst_1y_delta_pct"),
+                                ownership_trend=vel_res.get("institutional_velocity_trend"),
+                                hhi_score=moat_res.get("hhi_score"),
+                                concentration_regime=moat_res.get("concentration_regime"),
+                                pricing_power_score=moat_res.get("pricing_power_score"),
+                                pricing_power_rating=moat_res.get("pricing_power_rating"),
                                 displacement_mode=moat_res["displacement_mode"],
                                 moat_rating=moat_res["economic_moat_rating"],
+                                lifecycle_stage=coords_res.get("stage") or coords_res.get("lifecycle_stage") or "2_SCALING",
                                 scale_coord=coords_res["scale_coordinate"],
                                 reinvestment_coord=coords_res["reinvestment_intensity_coordinate"],
                                 efficiency_coord=coords_res["capital_efficiency_coordinate"],

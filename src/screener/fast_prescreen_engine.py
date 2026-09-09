@@ -14,6 +14,7 @@ from sqlalchemy import func
 
 from src.db.models import Company, BitemporalFinancial, DailyPriceRaw, ResearchFeatureSnapshot
 from src.screener.screener_models import ScreenerFilterRequest, FunnelAttritionStats
+from src.screener.missing_data_guard import MissingDataGuard, SectorCategory
 
 
 class FastPreScreenEngine:
@@ -62,12 +63,14 @@ class FastPreScreenEngine:
                 if comp.nse_symbol and not isin_map[key].nse_symbol:
                     isin_map[key] = comp
 
+        # Batch query company IDs with existing prices and financial filings (eliminates N+1 query overhead)
+        price_cids = {cid for (cid,) in db.query(DailyPriceRaw.company_id).distinct().all()}
+        fin_cids = {cid for (cid,) in db.query(BitemporalFinancial.company_id).distinct().all()}
+
         eligible_companies = []
         for comp in isin_map.values():
             # Ensure entity has at least 1 price and 1 financial filing
-            has_price = db.query(DailyPriceRaw.trading_date).filter(DailyPriceRaw.company_id == comp.company_id).first() is not None
-            has_fin = db.query(BitemporalFinancial.financial_id).filter(BitemporalFinancial.company_id == comp.company_id).first() is not None
-            if has_price and has_fin:
+            if comp.company_id in price_cids and comp.company_id in fin_cids:
                 eligible_companies.append(comp)
 
         return eligible_companies
@@ -133,15 +136,50 @@ class FastPreScreenEngine:
             if not latest_bs or latest_bs.net_worth is None:
                 continue
 
-            # Query latest price
-            latest_price = db.query(DailyPriceRaw).filter(
+            # Query recent daily prices for technical trend and 52W price structure
+            recent_prices = db.query(DailyPriceRaw).filter(
                 DailyPriceRaw.company_id == comp.company_id
-            ).order_by(DailyPriceRaw.trading_date.desc()).first()
+            ).order_by(DailyPriceRaw.trading_date.desc()).limit(250).all()
 
-            if not latest_price or not latest_price.close_price:
+            if not recent_prices or not recent_prices[0].close_price:
                 continue
 
-            cmp = float(latest_price.close_price)
+            cmp = float(recent_prices[0].close_price)
+            all_closes = [float(p.close_price) for p in recent_prices if p.close_price is not None]
+            all_highs = [float(p.high_price or p.close_price) for p in recent_prices if (p.high_price or p.close_price) is not None]
+            all_lows = [float(p.low_price or p.close_price) for p in recent_prices if (p.low_price or p.close_price) is not None]
+
+            high_52w = max(all_highs) if all_highs else cmp
+            low_52w = min(all_lows) if all_lows else cmp
+            high_1m = max(all_highs[:22]) if len(all_highs) >= 22 else high_52w
+            high_3m = max(all_highs[:66]) if len(all_highs) >= 66 else high_52w
+            sma50 = (sum(all_closes[:50]) / len(all_closes[:50])) if len(all_closes) >= 50 else None
+            sma200 = (sum(all_closes[:200]) / len(all_closes[:200])) if len(all_closes) >= 200 else None
+
+            # Calculate approximate ATR (14-day)
+            atr_live = round(cmp * 0.02, 2)
+            if len(recent_prices) >= 15:
+                trs = []
+                for idx in range(14):
+                    cur = recent_prices[idx]
+                    prev = recent_prices[idx + 1]
+                    h = float(cur.high_price or cur.close_price)
+                    l = float(cur.low_price or cur.close_price)
+                    pc = float(prev.close_price)
+                    tr = max(h - l, abs(h - pc), abs(l - pc))
+                    trs.append(tr)
+                atr_live = round(sum(trs) / len(trs), 2) if trs else round(cmp * 0.02, 2)
+
+            # Filter: 52-Week High Proximity (if requested)
+            if req.near_52w_high_pct is not None and high_52w and high_52w > 0:
+                dist_from_high = ((high_52w - cmp) / high_52w) * 100.0
+                if dist_from_high > req.near_52w_high_pct:
+                    continue
+
+            # Filter: Minervini Stage 2 Uptrend (if requested)
+            if req.require_stage_2_uptrend:
+                if not (sma50 and sma200 and cmp > sma50 > sma200):
+                    continue
 
             # Derive metrics from authentic financial primitives
             nw = float(latest_bs.net_worth)
@@ -185,7 +223,7 @@ class FastPreScreenEngine:
                 rev_prior = float(prior_pl.revenue)
                 sales_growth = round(((rev_latest - rev_prior) / rev_prior) * 100.0, 1)
 
-            # Detect semi-annual vs quarterly cadence
+            # Detect semi-annual vs quarterly cadence and compute authentic TTM
             periods_per_year = 4
             if len(pls) >= 2:
                 try:
@@ -197,20 +235,39 @@ class FastPreScreenEngine:
                 except Exception:
                     pass
 
-            # Authentic ROCE & Capital Employed
-            ebit_quarterly = float(latest_pl.ebit or 0.0) if latest_pl else 0.0
-            ebit_ann = ebit_quarterly * periods_per_year if latest_pl and latest_pl.period_type == "QUARTERLY" else ebit_quarterly
+            # Authentic TTM Derivation: If >= 4 quarterly statements exist, sum rolling 4Q
+            quarterly_pls = [p for p in pls if p.period_type == "QUARTERLY"]
+            if len(quarterly_pls) >= 4:
+                recent_4q = quarterly_pls[:4]
+                pat_ann = sum(float(p.pat or 0.0) for p in recent_4q)
+                ebit_ann = sum(float(p.ebit or 0.0) for p in recent_4q)
+                revenue_cr = round(sum(float(p.revenue or 0.0) for p in recent_4q), 2)
+            else:
+                pat_quarterly = float(latest_pl.pat or 0.0) if latest_pl else 0.0
+                pat_ann = pat_quarterly * periods_per_year if latest_pl and latest_pl.period_type == "QUARTERLY" else pat_quarterly
+                ebit_quarterly = float(latest_pl.ebit or 0.0) if latest_pl else 0.0
+                ebit_ann = ebit_quarterly * periods_per_year if latest_pl and latest_pl.period_type == "QUARTERLY" else ebit_quarterly
+                rev_base = float(latest_pl.revenue or 0.0) if latest_pl else 0.0
+                revenue_cr = round(rev_base * periods_per_year if latest_pl and latest_pl.period_type == "QUARTERLY" else rev_base, 2)
+
+            # Sector-Aware Financial Classification
+            comp_sym = comp.nse_symbol or comp.bse_code or comp.company_id
+            sector_cat = MissingDataGuard.resolve_sector(comp_sym, comp.company_name, getattr(comp, "sector", None))
+            is_financial = (sector_cat == SectorCategory.FINANCIALS)
+
+            pe = round(mcap_cr / pat_ann, 1) if pat_ann > 0 else None
+
+            # Authentic ROCE & Capital Employed vs Banking ROE
             cap_emp = max(10.0, nw + debt)
             roce = round((ebit_ann / cap_emp) * 100.0, 1) if (ebit_ann is not None and cap_emp > 0) else 0.0
             de = round(debt / max(1.0, nw), 2)
+            roe = round((pat_ann / max(10.0, nw)) * 100.0, 1) if (pat_ann is not None and nw > 0) else 0.0
 
-            # Authentic Annualized PAT & P/E ratio
-            pat_quarterly = float(latest_pl.pat or 0.0) if latest_pl else 0.0
-            pat_ann = pat_quarterly * periods_per_year if latest_pl and latest_pl.period_type == "QUARTERLY" else pat_quarterly
-            pe = round(mcap_cr / pat_ann, 1) if pat_ann > 0 else None
+            # Quality metric selection: for banks, use ROE; for non-financials, use ROCE
+            effective_quality = roe if is_financial else roce
 
-            # Hard Sieve for Insolvent Leverage
-            if de > 4.0:
+            # Hard Sieve for Insolvent Leverage (Exempt for regulated banks/NBFCs where debt is inventory)
+            if not is_financial and de > 4.0:
                 continue
 
             # Market Cap filter (if specifically bounded by user)
@@ -219,12 +276,12 @@ class FastPreScreenEngine:
             if req.max_market_cap_cr and mcap_cr > req.max_market_cap_cr:
                 continue
 
-            # Strict ROCE filter
-            if req.min_roce_pct is not None and roce < req.min_roce_pct:
+            # Strict Return Quality filter (checks ROE for financials, ROCE for industrials)
+            if req.min_roce_pct is not None and effective_quality < req.min_roce_pct:
                 continue
 
-            # Strict Solvency / Leverage filter
-            if req.max_debt_to_equity is not None and de > req.max_debt_to_equity:
+            # Strict Solvency / Leverage filter (Exempt for financials)
+            if not is_financial and req.max_debt_to_equity is not None and de > req.max_debt_to_equity:
                 continue
 
             # Strict Sales Growth filter (if requested and growth calculation exists)
@@ -237,24 +294,41 @@ class FastPreScreenEngine:
                 continue
 
             # Continuous Factor Scoring (0 - 100 composite ranking)
-            roce_subscore = min(100.0, max(10.0, (roce / 25.0) * 80.0))
-            solvency_subscore = min(100.0, max(20.0, 100.0 - (de * 35.0)))
+            if is_financial:
+                # Banks with ROE >= 15% get 80-100 pts; regulated solvency given baseline 80.0
+                quality_subscore = min(100.0, max(20.0, (effective_quality / 16.0) * 80.0))
+                solvency_subscore = 80.0
+            else:
+                quality_subscore = min(100.0, max(10.0, (roce / 25.0) * 80.0))
+                solvency_subscore = min(100.0, max(20.0, 100.0 - (de * 35.0)))
+
             growth_val = sales_growth if sales_growth is not None else 0.0
             growth_subscore = min(100.0, max(30.0, (growth_val / 20.0) * 85.0))
-            inflection_rank = round((roce_subscore * 0.40) + (solvency_subscore * 0.35) + (growth_subscore * 0.25), 1)
+            inflection_rank = round((quality_subscore * 0.40) + (solvency_subscore * 0.35) + (growth_subscore * 0.25), 1)
 
             candidates_scored.append({
                 "company_id": comp.company_id,
-                "symbol": comp.nse_symbol or comp.bse_code or comp.company_id,
+                "symbol": comp_sym,
                 "company_name": comp.company_name,
                 "market_cap_cr": mcap_cr,
                 "cmp": cmp,
                 "pe_ratio": pe,
-                "roce_pct": roce,
+                "roce_pct": effective_quality,
+                "roe_pct": roe,
+                "is_financial": is_financial,
+                "sector_category": sector_cat,
                 "sales_growth_pct": sales_growth,
                 "debt_to_equity": de,
                 "net_worth_cr": nw,
                 "total_debt_cr": debt,
+                "revenue_cr": revenue_cr,
+                "high_52w": high_52w,
+                "low_52w": low_52w,
+                "high_1m": high_1m,
+                "high_3m": high_3m,
+                "sma50": sma50,
+                "sma200": sma200,
+                "atr_live": atr_live,
                 "inflection_rank": inflection_rank
             })
 

@@ -164,7 +164,7 @@ Speak with razor-sharp institutional conviction. Eliminate filler words and gene
         for model in candidate_models:
             url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={api_key}"
             try:
-                resp = requests.post(url, json=payload, timeout=35)
+                resp = requests.post(url, json=payload, timeout=12)
                 if resp.status_code == 200:
                     data = resp.json()
                     text = data["candidates"][0]["content"]["parts"][0]["text"]

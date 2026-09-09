@@ -282,6 +282,7 @@ class IntradayFocusManager:
             # Synthetic 50/50 balance when depth is unavailable from non-broker feed
             "total_buy_quantity": 50000,
             "total_sell_quantity": 50000,
+            "is_synthetic_depth": True,
             "depth": {"buy": [], "sell": []}
         }
 
@@ -315,6 +316,8 @@ class IntradayFocusManager:
         low_p = float(ohlc.get("low") or ltp)
         prev_close = float(ohlc.get("close") or (ltp - net_chg))
 
+        is_synthetic = bool(quote.get("is_synthetic_depth", False) or source != "UPSTOX_V2_LIVE")
+
         # 1. Order Book Imbalance Ratio (OBI)
         total_buy_qty = float(quote.get("total_buy_quantity") or 0.0)
         total_sell_qty = float(quote.get("total_sell_quantity") or 0.0)
@@ -327,7 +330,10 @@ class IntradayFocusManager:
             obi_ratio = 0.50
             obi_pct = 50.0
 
-        if obi_pct >= 65.0:
+        if is_synthetic:
+            imbalance_label = "PROXY_DEPTH_UNVERIFIED"
+            imbalance_badge = "badge-slate"
+        elif obi_pct >= 65.0:
             imbalance_label = "AGGRESSIVE_BUYING_PRESSURE"
             imbalance_badge = "badge-emerald"
         elif obi_pct >= 55.0:
@@ -361,8 +367,12 @@ class IntradayFocusManager:
         else:
             gap_tag = "GAP_DOWN"
 
-        # 5. Microstructure Signal Classification
-        if is_near_hod and is_above_vwap and obi_pct >= 60.0:
+        # 5. Microstructure Signal Classification (Zero-Hallucination Guard)
+        if is_synthetic:
+            setup_signal = "L1_DATA_MONITOR"
+            signal_color = "var(--text-muted)"
+            status_text = "L1 Typical-Price Tracking (Connect Broker for Live Depth/VWAP Execution)"
+        elif is_near_hod and is_above_vwap and obi_pct >= 60.0:
             setup_signal = "ORB_BREAKOUT_SURGE"
             signal_color = "var(--accent-emerald)"
             status_text = "Breaking Out with Strong Bid Stacking"

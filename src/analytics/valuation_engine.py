@@ -147,9 +147,11 @@ class ValuationEngine:
             return None
 
         target_val = float(market_cap_cr)
-        if net_debt_cr is not None and net_debt_cr > 0 and base_cf == ttm_nopat_cr:
-            # When discounting operating earnings (NOPAT/FCFF), target Enterprise Value (MCap + Net Debt)
-            target_val += float(net_debt_cr)
+        if net_debt_cr is not None and base_cf == ttm_nopat_cr:
+            # When discounting operating earnings (NOPAT/FCFF), target Enterprise Value = MCap + Net Debt.
+            # Net Cash (net_debt_cr < 0) reduces required operating enterprise value.
+            # Enforce 35% liquidation/operating safety floor to prevent negative EV singularities in cash shells.
+            target_val = max(float(market_cap_cr) * 0.35, float(market_cap_cr) + float(net_debt_cr))
 
         def dcf_value(g: float) -> float:
             pv_explicit = 0.0
@@ -203,7 +205,8 @@ class ValuationEngine:
         debt_to_equity: Optional[float] = None,
         pe_percentile_3y: Optional[float] = None,
         ttm_nopat_cr: Optional[float] = None,
-        sustainable_growth_pct: Optional[float] = None
+        sustainable_growth_pct: Optional[float] = None,
+        net_debt_cr: Optional[float] = None
     ) -> Dict[str, Any]:
         """
         Full multi-factor institutional valuation synthesis.
@@ -211,7 +214,7 @@ class ValuationEngine:
         """
         peg_ratio, peg_status = cls.calculate_peg_ratio(pe_ratio, eps_growth_pct, sustainable_growth_pct=sustainable_growth_pct)
         fcf_yield_pct, gsec_spread_pct = cls.calculate_fcf_yield(ttm_fcf_cr, market_cap_cr)
-        implied_growth_pct = cls.solve_reverse_dcf_implied_growth(market_cap_cr, ttm_fcf_cr, ttm_nopat_cr=ttm_nopat_cr)
+        implied_growth_pct = cls.solve_reverse_dcf_implied_growth(market_cap_cr, ttm_fcf_cr, ttm_nopat_cr=ttm_nopat_cr, net_debt_cr=net_debt_cr)
 
         is_fcf_depressed = (
             ttm_fcf_cr is not None

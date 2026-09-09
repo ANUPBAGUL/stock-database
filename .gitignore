@@ -50,6 +50,10 @@ data/*.db
 
 # Scratch & Temporary files
 scratch/
+*.bak
+data/nse_delivery_cache/
+data/nse_derivatives_cache/
+data/continuation_backtest_report.json
 
 # Logs
 logs/

@@ -82,7 +82,8 @@ class ScreenerService:
                 cloud_hits = LiveQueryAdapter.query_tradingview_india_scanner(req, limit=req.limit * 2)
                 if cloud_hits:
                     survivors = cloud_hits
-                    stage1_count = 4200
+                    scan_stats = LiveQueryAdapter.get_last_scan_stats()
+                    stage1_count = scan_stats.get("stage1_count", len(cloud_hits))
                 else:
                     logger.warning("Live cloud scanner returned no matches or timed out. Falling back to local database.")
                     req.mode = "LOCAL_DB"
@@ -93,12 +94,45 @@ class ScreenerService:
                 stage1_count = len(eligible_comps)
                 survivors = FastPreScreenEngine.execute_stage2_prescreen(db, eligible_comps, req)
 
-            # Sort survivors by ROCE & Market Cap
-            survivors.sort(key=lambda x: (x.get("roce_pct", 0) * 0.6 + (x.get("market_cap_cr", 0) / 1000.0) * 0.4), reverse=True)
             stage2_count = len(survivors)
 
-            # Limit candidates entering Stage 3 Deep Compute for sub-second performance
-            stage3_candidates = survivors[:min(req.limit * 2, 50)]
+            # 200-IQ Stratified Market-Cap Allocation for Stage 3 Deep Compute:
+            # Rather than a naive market-cap sum that biases toward mega-caps, allocate
+            # guaranteed representation across Small-Cap, Mid-Cap, and Large-Cap tiers based on
+            # multi-factor inflection_rank. This guarantees 10-bagger small/mid-caps are never crowded out.
+            small_caps = [s for s in survivors if float(s.get("market_cap_cr") or 0.0) <= 5000.0]
+            mid_caps = [s for s in survivors if 5000.0 < float(s.get("market_cap_cr") or 0.0) <= 25000.0]
+            large_caps = [s for s in survivors if float(s.get("market_cap_cr") or 0.0) > 25000.0]
+
+            small_caps.sort(key=lambda x: x.get("inflection_rank", 0.0), reverse=True)
+            mid_caps.sort(key=lambda x: x.get("inflection_rank", 0.0), reverse=True)
+            large_caps.sort(key=lambda x: x.get("inflection_rank", 0.0), reverse=True)
+
+            max_stage3 = min(req.limit * 2, 50)
+            target_small = min(len(small_caps), max(1, round(max_stage3 * 0.40)))
+            target_mid = min(len(mid_caps), max(1, round(max_stage3 * 0.36)))
+            target_large = min(len(large_caps), max(1, round(max_stage3 * 0.24)))
+
+            selected_set = set()
+            stage3_candidates = []
+
+            for pool, target in [(small_caps, target_small), (mid_caps, target_mid), (large_caps, target_large)]:
+                for cand in pool[:target]:
+                    if len(stage3_candidates) >= max_stage3:
+                        break
+                    cid = cand.get("company_id") or cand.get("symbol")
+                    if cid not in selected_set:
+                        selected_set.add(cid)
+                        stage3_candidates.append(cand)
+
+            # If capacity remains, backfill from remaining survivors sorted by inflection_rank
+            if len(stage3_candidates) < max_stage3:
+                remaining = sorted(
+                    [s for s in survivors if (s.get("company_id") or s.get("symbol")) not in selected_set],
+                    key=lambda x: x.get("inflection_rank", 0.0),
+                    reverse=True
+                )
+                stage3_candidates.extend(remaining[:(max_stage3 - len(stage3_candidates))])
 
             # 3. Stage 3: Deep 5-Pillar Asymmetry Evaluation with On-Demand Live Ingestion
             evaluated_candidates = []
@@ -114,26 +148,11 @@ class ScreenerService:
 
                 # High-Throughput Non-Blocking Evaluation:
                 # If company exists in local DB with audited records, evaluate via deep bitemporal compute.
-                # If company is not yet in local DB, evaluate immediately using verified scanner columns
-                # and asynchronously queue background ingestion so future queries have full bitemporal history.
+                # If company is evaluated from live cloud scanner, evaluate using verified scanner columns.
                 if comp_match and comp_match.financials and len(comp_match.financials) >= 2:
                     cand_with_id = {**cand, "company_id": comp_match.company_id}
                     eval_res = Deep5PillarScreener.evaluate_candidate(db, cand_with_id)
                 else:
-                    # Asynchronously queue background ingestion for top novel candidates without blocking HTTP response
-                    if len(evaluated_candidates) < 3 and cand.get("symbol"):
-                        try:
-                            import threading
-                            from src.watchlist.watchlist_manager import WatchlistManager
-                            threading.Thread(
-                                target=WatchlistManager.batch_process_stock_text,
-                                args=(cand["symbol"],),
-                                daemon=True
-                            ).start()
-                        except Exception as t_err:
-                            logger.debug(f"[Screener Stage 3] Background queue error for {cand['symbol']}: {t_err}")
-
-                    # Fallback only when network/external sources are completely unreachable:
                     # Evaluate strictly with verified scanner columns, NEVER fabricating synthetic corporate figures.
                     cmp = cand["cmp"]
                     mcap = cand.get("market_cap_cr", 5000.0)
@@ -205,19 +224,13 @@ class ScreenerService:
                     else:
                         p2_runway = 50.0
 
-                    # Pillar 3: Working Capital (DSO based)
+                    # Pillar 3: Working Capital (DSO based continuous curve)
                     dso = cand.get("dso_days")
                     if cand.get("sector_category") == "FINANCIALS":
                         p3_wc = 80.0
                     elif dso is not None:
-                        if dso <= 45.0:
-                            p3_wc = 95.0
-                        elif dso <= 75.0:
-                            p3_wc = 80.0
-                        elif dso <= 110.0:
-                            p3_wc = 65.0
-                        else:
-                            p3_wc = 40.0
+                        # Continuous score: DSO <= 30 is 95+, DSO 60 is ~80, DSO 120 is ~55, DSO > 180 is <= 30
+                        p3_wc = round(min(100.0, max(20.0, 105.0 - (dso * 0.42))), 1)
                     else:
                         p3_wc = 50.0
 
@@ -235,7 +248,14 @@ class ScreenerService:
                     )
 
                     # Sustainable Compounding Capacity: g_sustainable = ROIC * Reinvestment Rate
-                    reinvest_rate = round(min(80.0, max(20.0, (rev_growth / max(1.0, eff_qual)) * 100.0 if eff_qual > 0 else 30.0)), 1)
+                    # Authentic Capital Retention: Reinvestment Rate = 1.0 - (FCF / Net Income)
+                    if net_income_cr and net_income_cr > 0 and fcf_cr is not None:
+                        capital_retention = 1.0 - (fcf_cr / net_income_cr)
+                        reinvest_rate = round(min(85.0, max(15.0, capital_retention * 100.0)), 1)
+                    else:
+                        # Baseline reinvestment rate estimate based on sales growth velocity
+                        reinvest_rate = round(min(75.0, max(20.0, 30.0 + (rev_growth * 0.5))), 1)
+
                     sustainable_compounding = round(min(60.0, max(5.0, (eff_qual * reinvest_rate) / 100.0)), 1)
 
                     if implied_growth is not None and (-40.0 <= implied_growth <= 80.0):
@@ -245,18 +265,34 @@ class ScreenerService:
                         asym_gap = 0.0
                         p4_gap = 50.0
 
-                    # Pillar 5: Price Structure (Minervini Stage 2 SMA Trend)
+                    # Pillar 5: Price Structure (Continuous Minervini Stage 2 SMA Trend)
                     sma50_val = sma50 or ema50
                     sma200_val = sma200 or ema200
                     is_stage2 = (cmp > sma50_val > sma200_val) if (sma50_val and sma200_val) else False
-                    p5_price = 75.0 if is_stage2 else 50.0
+                    if sma50_val and sma200_val and sma200_val > 0:
+                        trend_spread = (sma50_val - sma200_val) / sma200_val
+                        price_to_sma50 = (cmp - sma50_val) / sma50_val
+                        if cmp > sma50_val > sma200_val:
+                            base_p5 = 70.0 + min(25.0, max(0.0, (trend_spread * 100.0) + (price_to_sma50 * 50.0)))
+                        elif cmp > sma200_val:
+                            base_p5 = 55.0 + min(15.0, max(0.0, price_to_sma50 * 30.0))
+                        else:
+                            base_p5 = max(20.0, 50.0 + (price_to_sma50 * 50.0))
+                        p5_price = round(min(98.0, max(20.0, base_p5)), 1)
+                    else:
+                        p5_price = 50.0
 
-                    # Entry Quality (for Swing Readiness)
+                    # Continuous Entry Quality (for Swing Readiness)
                     h1m = cand.get("high_1m")
-                    dist_pivot = round(((cmp - h1m) / h1m) * 100.0, 1) if h1m else 0.0
                     atr_weekly = cand.get("atr_weekly")
-                    atr_contraction = (atr_live / atr_weekly) if (atr_live and atr_weekly and atr_weekly > 0) else 1.0
-                    entry_q = 80.0 if (abs(dist_pivot) < 5.0 and atr_contraction < 0.85) else (65.0 if is_stage2 else 45.0)
+                    if h1m and h1m > 0:
+                        dist_pivot = ((cmp - h1m) / h1m) * 100.0
+                        atr_contraction = (atr_live / atr_weekly) if (atr_live and atr_weekly and atr_weekly > 0) else 1.0
+                        dist_penalty = abs(dist_pivot) * 2.5
+                        contraction_bonus = max(-15.0, min(20.0, (1.0 - atr_contraction) * 40.0))
+                        entry_q = round(min(95.0, max(25.0, 70.0 - dist_penalty + contraction_bonus)), 1)
+                    else:
+                        entry_q = 65.0 if is_stage2 else 45.0
 
                     m7_idx = round((business_pot * 0.40) + (p4_gap * 0.35) + (p5_price * 0.15) + (p3_wc * 0.10), 1)
                     conviction_score = round((business_pot * 0.35) + (p1_inflection * 0.20) + (p4_gap * 0.25) + (p5_price * 0.10) + (p3_wc * 0.10), 1)
@@ -265,20 +301,20 @@ class ScreenerService:
                     rvol_est = rvol_live if rvol_live is not None else 1.0
                     avg_turnover = cand.get("turnover_10d_cr") or (round((float(cand.get("volume", 0)) * cmp) / 10000000.0, 2) if cand.get("volume") else None)
 
-                    if conviction_score >= 80.0 and m7_idx >= 72.0:
-                        likelihood_rank = "PRIME_INFLECTION"
-                    elif conviction_score >= 68.0 and m7_idx >= 62.0:
-                        likelihood_rank = "HIGH_CONVICTION"
-                    elif conviction_score >= 52.0:
-                        likelihood_rank = "EMERGING"
+                    if m7_idx >= 85.0 and asym_gap >= 5.0:
+                        likelihood_rank = "CONVICTION"
+                    elif m7_idx >= 70.0:
+                        likelihood_rank = "HIGH"
+                    elif m7_idx >= 50.0:
+                        likelihood_rank = "MEDIUM"
                     else:
-                        likelihood_rank = "SPECULATIVE"
+                        likelihood_rank = "EMERGING"
 
                     # Lifecycle stage classification
                     try:
                         lc_res = LifecycleClassifier.classify_company_stage(
                             market_cap_cr=mcap,
-                            revenue_cr=sales_cr if sales_cr is not None else 500.0,
+                            revenue_cr=sales_cr if (sales_cr is not None and sales_cr > 0) else 500.0,
                             revenue_growth_yoy_pct=rev_growth if rev_growth is not None else 15.0,
                             ebitda_growth_yoy_pct=pat_growth if pat_growth is not None else 15.0,
                             pat_growth_yoy_pct=pat_growth if pat_growth is not None else 15.0,
@@ -361,8 +397,18 @@ class ScreenerService:
             # Sort by preset-appropriate vector
             if req.preset == "SWING_VCP_BREAKOUT_PRESET":
                 evaluated_candidates.sort(key=lambda x: x.get("swing_readiness_score", 0.0), reverse=True)
+            elif req.preset == "INTRADAY_MOMENTUM_SCALP_PRESET":
+                evaluated_candidates.sort(
+                    key=lambda x: (float(x.get("rvol") or 1.0) * (1.0 + abs(float(x.get("range_expansion_pct") or 0.0)) / 100.0)),
+                    reverse=True
+                )
+            elif req.preset == "MULTIBAGGER_INFLECTION_PRESET":
+                evaluated_candidates.sort(key=lambda x: x.get("multibagger_conviction_score", 0.0), reverse=True)
             else:
-                evaluated_candidates.sort(key=lambda x: x["multibagger_conviction_score"], reverse=True)
+                evaluated_candidates.sort(
+                    key=lambda x: (x.get("multibagger_conviction_score", 0.0) * 0.6 + x.get("business_potential_score", 0.0) * 0.4),
+                    reverse=True
+                )
             stage3_count = len(evaluated_candidates)
 
             # 4. Stage 4: Multi-Horizon Feed Routing & Invalidation Triggers
@@ -382,7 +428,8 @@ class ScreenerService:
                 if card.thesis_category == "CONVICTION_BUY":
                     long_term_feed.append(card)
                 elif card.thesis_category == "STRATEGIC_WATCHLIST":
-                    strategic_watchlist_feed.append(card)
+                    if card.business_potential_score >= 70.0:
+                        strategic_watchlist_feed.append(card)
                 
                 if card.swing_setup.is_active or card.thesis_category == "SWING_SETUP":
                     swing_feed.append(card)
@@ -396,7 +443,8 @@ class ScreenerService:
             elapsed_ms = round((time.time() - start_time) * 1000.0, 2)
 
             if req.mode == "LIVE_CLOUD":
-                u_count = 5000  # Total universe of active NSE/BSE listed equities
+                scan_stats = LiveQueryAdapter.get_last_scan_stats()
+                u_count = scan_stats.get("total_count", 5000)
                 s1_count = stage1_count
                 s2_count = stage2_count
                 s3_count = stage3_count

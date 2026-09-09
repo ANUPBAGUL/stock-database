@@ -143,6 +143,8 @@ class ScreenerCandidateResult(BaseModel):
     pe_ratio: Optional[float] = None
     roce_pct: Optional[float] = None
     debt_to_equity: Optional[float] = None
+    sector_category: Optional[str] = None
+    high_52w: Optional[float] = None
     
     # 4 Decoupled Orthogonal Vectors (Mauboussin / Institutional Matrix)
     business_potential_score: float = 0.0      # Score A: Long-term business quality & compounding runway (0-100)
@@ -165,6 +167,7 @@ class ScreenerCandidateResult(BaseModel):
 
     # 5-Pillar Scores (0-100)
     multibagger_conviction_score: float = 0.0
+    swing_readiness_score: Optional[float] = None
     economic_inflection_p1: float = 0.0
     reinvestment_runway_p2: float = 0.0
     working_capital_p3: float = 0.0

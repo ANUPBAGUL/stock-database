@@ -763,10 +763,528 @@
             display: flex;
         }
 
-        .obi-meter-buy {
+        /* Market Mood & AI Strategist Tab Styles */
+        .macro-ribbon {
+            background: linear-gradient(135deg, rgba(15, 22, 36, 0.95), rgba(21, 31, 50, 0.85));
+            border: 1px solid rgba(0, 240, 255, 0.25);
+            border-radius: 12px;
+            padding: 1.25rem 1.5rem;
+            margin-bottom: 1.5rem;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.08);
+        }
+
+        .macro-kpi-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+            gap: 1rem;
+            margin-bottom: 1rem;
+        }
+
+        .macro-kpi-card {
+            background: rgba(0, 0, 0, 0.35);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            padding: 0.85rem 1rem;
+            transition: all 0.2s ease;
+        }
+
+        .macro-kpi-card:hover {
+            border-color: rgba(0, 240, 255, 0.4);
+            transform: translateY(-2px);
+        }
+
+        .macro-kpi-label {
+            font-size: 0.70rem;
+            color: var(--text-dim);
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            margin-bottom: 4px;
+        }
+
+        .macro-kpi-val {
+            font-size: 1.35rem;
+            font-weight: 800;
+            font-family: var(--font-mono);
+            color: #fff;
+        }
+
+        .macro-kpi-sub {
+            font-size: 0.72rem;
+            color: var(--text-muted);
+            margin-top: 3px;
+        }
+
+        .delta-banner {
+            background: rgba(0, 240, 255, 0.05);
+            border-left: 3px solid var(--accent-cyan);
+            border-radius: 0 8px 8px 0;
+            padding: 0.65rem 1rem;
+            font-size: 0.80rem;
+            line-height: 1.45;
+            color: #cbd5e1;
+            margin-bottom: 1rem;
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+        }
+
+        .two-column-analytics {
+            display: grid;
+            grid-template-columns: 1fr 1.3fr;
+            gap: 1.25rem;
+            margin-bottom: 1.5rem;
+        }
+
+        @media (max-width: 1080px) {
+            .two-column-analytics {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        .vector-card {
+            background: rgba(0, 0, 0, 0.35);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            padding: 0.85rem 1rem;
+            margin-bottom: 0.85rem;
+        }
+
+        .vector-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 0.6rem;
+        }
+
+        .vector-title {
+            font-size: 0.80rem;
+            font-weight: 700;
+            color: #fff;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .split-bar-container {
+            width: 100%;
+            height: 8px;
+            background: rgba(255, 0, 85, 0.65);
+            border-radius: 4px;
+            overflow: hidden;
+            display: flex;
+            margin: 6px 0;
+        }
+
+        .split-bar-fill {
             height: 100%;
             background: var(--accent-emerald);
-            transition: width 0.35s ease;
+            transition: width 0.4s ease;
+        }
+
+        .cio-memo-card {
+            background: linear-gradient(145deg, rgba(168, 85, 247, 0.08), rgba(0, 240, 255, 0.04));
+            border: 1px solid rgba(168, 85, 247, 0.3);
+            border-radius: 10px;
+            padding: 1.2rem;
+            margin-bottom: 1.25rem;
+            position: relative;
+        }
+
+        .cio-memo-title {
+            font-size: 0.88rem;
+            font-weight: 800;
+            color: var(--accent-purple);
+            margin-bottom: 0.65rem;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            letter-spacing: -0.01em;
+        }
+
+        .cio-memo-body {
+            font-size: 0.84rem;
+            line-height: 1.6;
+            color: #e2e8f0;
+        }
+
+        .explainable-filter-card {
+            background: rgba(0, 0, 0, 0.35);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            padding: 0.8rem 1rem;
+            margin-bottom: 0.65rem;
+            transition: all 0.2s ease;
+        }
+
+        .explainable-filter-card:hover {
+            border-color: rgba(0, 240, 255, 0.35);
+            background: rgba(0, 0, 0, 0.45);
+        }
+
+        .filter-name-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 4px;
+        }
+
+        .filter-name {
+            font-size: 0.80rem;
+            font-weight: 700;
+            color: #fff;
+        }
+
+        .filter-threshold-pill {
+            font-size: 0.68rem;
+            font-family: var(--font-mono);
+            font-weight: 700;
+            padding: 2px 8px;
+            border-radius: 4px;
+            background: rgba(0, 240, 255, 0.12);
+            color: var(--accent-cyan);
+            border: 1px solid rgba(0, 240, 255, 0.3);
+        }
+
+        .filter-rationale {
+            font-size: 0.74rem;
+            color: var(--text-muted);
+            line-height: 1.45;
+        }
+
+        .sieve-step-bar {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 4px 0;
+            font-size: 0.72rem;
+        }
+
+        .sieve-bar-outer {
+            flex: 1;
+            height: 6px;
+            background: rgba(255, 255, 255, 0.06);
+            border-radius: 3px;
+            overflow: hidden;
+        }
+
+        .sieve-bar-inner {
+            height: 100%;
+            background: linear-gradient(90deg, var(--accent-purple), var(--accent-cyan));
+            border-radius: 3px;
+            transition: width 0.4s ease;
+        }
+
+        /* Adaptive Trade Cards (2R/3R Architecture) */
+        .adaptive-trade-card {
+            background: rgba(21, 31, 50, 0.95);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 12px;
+            padding: 1.25rem;
+            display: flex;
+            flex-direction: column;
+            gap: 0.75rem;
+            position: relative;
+            transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+        }
+
+        .adaptive-trade-card:hover {
+            border-color: var(--accent-cyan);
+            transform: translateY(-4px);
+            box-shadow: 0 14px 35px rgba(0, 240, 255, 0.15);
+        }
+
+        .trade-card-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+        }
+
+        .trade-card-symbol {
+            font-size: 1.25rem;
+            font-weight: 900;
+            letter-spacing: -0.02em;
+            color: #fff;
+        }
+
+        .trade-card-sector {
+            font-size: 0.68rem;
+            color: var(--text-dim);
+            margin-top: 1px;
+        }
+
+        .dvm-matrix {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 5px;
+            background: rgba(0, 0, 0, 0.3);
+            border: 1px solid rgba(255, 255, 255, 0.05);
+            border-radius: 6px;
+            padding: 6px 8px;
+            text-align: center;
+        }
+
+        .dvm-pill-label {
+            font-size: 0.60rem;
+            color: var(--text-dim);
+            font-weight: 700;
+        }
+
+        .dvm-pill-val {
+            font-size: 0.82rem;
+            font-weight: 800;
+            font-family: var(--font-mono);
+        }
+
+        .bracket-ladder {
+            background: rgba(0, 240, 255, 0.04);
+            border: 1px solid rgba(0, 240, 255, 0.2);
+            border-radius: 8px;
+            padding: 0.75rem;
+        }
+
+        .bracket-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 6px;
+            text-align: center;
+        }
+
+        .bracket-col-label {
+            font-size: 0.60rem;
+            color: var(--text-dim);
+            text-transform: uppercase;
+        }
+
+        .bracket-col-val {
+            font-size: 0.88rem;
+            font-weight: 800;
+            font-family: var(--font-mono);
+        }
+
+        .rrg-chip {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            padding: 3px 8px;
+            border-radius: 4px;
+            font-size: 0.70rem;
+            font-weight: 600;
+            margin: 2px;
+        }
+
+        /* Follow-Through Radar Styles & Institutional Modern Theme */
+        .radar-horizon-pill {
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            color: #cbd5e1;
+            padding: 0.4rem 0.95rem;
+            border-radius: 6px;
+            font-size: 0.78rem;
+            font-weight: 700;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+        }
+        .radar-horizon-pill:hover {
+            border-color: rgba(0, 240, 255, 0.5);
+            color: #fff;
+        }
+        .radar-horizon-pill.active {
+            background: linear-gradient(135deg, var(--accent-cyan), var(--accent-purple));
+            color: #050b14;
+            border-color: transparent;
+            box-shadow: 0 0 14px rgba(0, 240, 255, 0.45);
+        }
+        .radar-chip {
+            background: rgba(0, 0, 0, 0.35);
+            border: 1px solid rgba(255, 255, 255, 0.12);
+            color: var(--text-muted);
+            padding: 0.32rem 0.8rem;
+            border-radius: 20px;
+            font-size: 0.72rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+        .radar-chip:hover {
+            border-color: rgba(255, 255, 255, 0.3);
+            color: #fff;
+        }
+        .radar-chip.active {
+            background: rgba(0, 240, 255, 0.15);
+            border-color: var(--accent-cyan);
+            color: var(--accent-cyan);
+        }
+
+        /* View Mode Switcher Pills */
+        .radar-view-pill {
+            background: transparent;
+            border: none;
+            color: var(--text-muted);
+            font-size: 0.70rem;
+            font-weight: 700;
+            padding: 0.30rem 0.75rem;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: all 0.15s ease;
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+        }
+        .radar-view-pill:hover {
+            color: #fff;
+        }
+        .radar-view-pill.active {
+            background: rgba(0, 240, 255, 0.22);
+            color: var(--accent-cyan);
+            font-weight: 800;
+        }
+
+        /* Radar Responsive Cards Grid */
+        .radar-cards-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(480px, 1fr));
+            gap: 1.25rem;
+            margin-top: 1.25rem;
+        }
+        @media (max-width: 1080px) {
+            .radar-cards-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        /* Radar Stock Card: Unified, Self-Contained, Premium Glassmorphism */
+        .radar-stock-card {
+            background: linear-gradient(180deg, rgba(15, 23, 42, 0.95) 0%, rgba(10, 15, 30, 0.98) 100%);
+            border: 1px solid rgba(255, 255, 255, 0.09);
+            border-radius: 12px;
+            padding: 1.15rem 1.25rem;
+            display: flex;
+            flex-direction: column;
+            gap: 0.85rem;
+            box-shadow: 0 10px 30px -5px rgba(0, 0, 0, 0.5), 0 0 1px 1px rgba(255, 255, 255, 0.05) inset;
+            transition: transform 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
+            position: relative;
+            overflow: hidden;
+        }
+        .radar-stock-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 16px 36px -4px rgba(0, 0, 0, 0.65), 0 0 1px 1px rgba(0, 240, 255, 0.2) inset;
+        }
+
+        /* Card Header */
+        .radar-card-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+            padding-bottom: 0.65rem;
+        }
+
+        /* Hero Probability Banner */
+        .radar-hero-banner {
+            display: grid;
+            grid-template-columns: 1fr auto;
+            align-items: center;
+            gap: 1rem;
+            background: rgba(0, 0, 0, 0.45);
+            border: 1px solid rgba(255, 255, 255, 0.06);
+            border-radius: 10px;
+            padding: 0.75rem 1rem;
+        }
+
+        /* Dual Metrics Deck */
+        .radar-metrics-deck {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 0.65rem;
+        }
+        .radar-metric-panel {
+            background: rgba(0, 0, 0, 0.35);
+            border: 1px solid rgba(255, 255, 255, 0.05);
+            border-radius: 8px;
+            padding: 0.65rem 0.8rem;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            gap: 4px;
+        }
+
+        /* Financial Execution Bracket */
+        .radar-bracket-ladder {
+            background: rgba(0, 240, 255, 0.03);
+            border: 1px solid rgba(0, 240, 255, 0.18);
+            border-radius: 8px;
+            padding: 0.6rem 0.75rem;
+        }
+
+        /* Tactical Segmented Drawer Tabs */
+        .radar-drawer-tab-bar {
+            display: flex;
+            gap: 4px;
+            background: rgba(0, 0, 0, 0.45);
+            border-radius: 6px;
+            padding: 2px;
+            border: 1px solid rgba(255, 255, 255, 0.08);
+        }
+        .radar-drawer-tab {
+            flex: 1;
+            background: transparent;
+            border: none;
+            color: var(--text-dim);
+            font-size: 0.68rem;
+            font-weight: 700;
+            padding: 0.32rem 0.5rem;
+            border-radius: 4px;
+            cursor: pointer;
+            text-align: center;
+            transition: all 0.15s ease;
+        }
+        .radar-drawer-tab:hover {
+            color: #fff;
+        }
+        .radar-drawer-tab.active {
+            background: rgba(255, 255, 255, 0.09);
+            color: var(--accent-cyan);
+            font-weight: 800;
+        }
+
+        .radar-drawer-content {
+            background: rgba(0, 0, 0, 0.4);
+            border-radius: 6px;
+            padding: 0.65rem 0.8rem;
+            font-size: 0.72rem;
+            line-height: 1.45;
+            border: 1px solid rgba(255, 255, 255, 0.05);
+        }
+
+        /* Radar Data Table Styles */
+        .radar-data-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.76rem;
+        }
+        .radar-data-table th {
+            background: rgba(0, 0, 0, 0.6);
+            padding: 10px 12px;
+            color: var(--text-dim);
+            font-weight: 800;
+            text-transform: uppercase;
+            font-size: 0.66rem;
+            letter-spacing: 0.04em;
+            border-bottom: 2px solid rgba(0, 240, 255, 0.25);
+            white-space: nowrap;
+        }
+        .radar-data-table td {
+            padding: 9px 12px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+            vertical-align: middle;
+        }
+        .radar-data-table tr:hover {
+            background: rgba(0, 240, 255, 0.04);
         }
     </style>
 </head>
@@ -813,6 +1331,7 @@
         <button class="tab-btn" onclick="switchMainTab('tab-institutional')">🧬 3. Quantitative Truth & Invariants
             Lab</button>
         <button class="tab-btn" onclick="switchMainTab('tab-screener')">⚡ 4. Instant Quantamental Screener</button>
+        <button class="tab-btn" onclick="switchMainTab('tab-market-strategist')">🏛️ 5. Market Mood & AI Strategist</button>
     </div>
 
     <!-- Main Workspace -->
@@ -1187,8 +1706,8 @@
                         <div>
                             <label style="font-size: 0.72rem; color: var(--text-dim);">SCREEN MODE</label>
                             <select id="scMode" class="input-control" style="margin-bottom:0;">
+                                <option value="LIVE_CLOUD" selected>🌐 Live Cloud On-Demand (5,000+ Stocks)</option>
                                 <option value="LOCAL_DB">⚡ Instant Local Database</option>
-                                <option value="LIVE_CLOUD">🌐 Live Cloud On-Demand</option>
                             </select>
                         </div>
                     </div>
@@ -1233,6 +1752,8 @@
                 style="display: flex; gap: 0.75rem; border-bottom: 1px solid var(--border-color); margin-bottom: 1.25rem;">
                 <button class="tab-btn active" id="subTabAllBtn" onclick="switchScreenerSubTab('sc-all')">🌟 Top
                     Candidates (<span id="scCountAll">0</span>)</button>
+                <button class="tab-btn" id="subTabLongTermBtn" onclick="switchScreenerSubTab('sc-longterm')">🏆
+                    Conviction Compounders (<span id="scCountLongTerm">0</span>)</button>
                 <button class="tab-btn" id="subTabStrategicBtn" onclick="switchScreenerSubTab('sc-strategic')">💎
                     Strategic Watchlist (<span id="scCountStrategic">0</span>)</button>
                 <button class="tab-btn" id="subTabSwingBtn" onclick="switchScreenerSubTab('sc-swing')">📈 Research-Grade
@@ -1249,19 +1770,484 @@
                 </div>
             </div>
 
-            <!-- Sub Tab 2: Strategic Watchlist Grid (High Potential, Base Building) -->
+            <!-- Sub Tab 2: Long-Term Conviction Compounders Grid -->
+            <div id="sc-longterm" class="screener-subtab-content" style="display: none;">
+                <div id="screenerLongTermGrid" class="cards-grid"></div>
+            </div>
+
+            <!-- Sub Tab 3: Strategic Watchlist Grid (High Potential, Base Building) -->
             <div id="sc-strategic" class="screener-subtab-content" style="display: none;">
                 <div id="screenerStrategicGrid" class="cards-grid"></div>
             </div>
 
-            <!-- Sub Tab 3: Swing Setups Grid -->
+            <!-- Sub Tab 4: Swing Setups Grid -->
             <div id="sc-swing" class="screener-subtab-content" style="display: none;">
                 <div id="screenerSwingGrid" class="cards-grid"></div>
             </div>
 
-            <!-- Sub Tab 4: Intraday Scalp Grid -->
+            <!-- Sub Tab 5: Intraday Scalp Grid -->
             <div id="sc-intraday" class="screener-subtab-content" style="display: none;">
                 <div id="screenerIntradayGrid" class="cards-grid"></div>
+            </div>
+        </div>
+
+        <!-- TAB 5: Market Mood & AI Strategist (Top-Down Macro Intelligence + 2R/3R Actionable Radar) -->
+        <div id="tab-market-strategist" class="tab-content">
+            <!-- Top Macro Ribbon / Executive Command Bar -->
+            <div class="macro-ribbon">
+                <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 1rem; flex-wrap: wrap; margin-bottom: 1.25rem;">
+                    <div>
+                        <div style="display: flex; align-items: center; gap: 0.6rem;">
+                            <span style="font-size: 1.5rem;">🏛️</span>
+                            <h2 style="font-size: 1.35rem; font-weight: 900; letter-spacing: -0.02em; color: #fff;">
+                                Macro Market Mood & AI Strategist
+                            </h2>
+                            <span id="mmRegimeBadge" class="badge-tag badge-emerald" style="font-size: 0.82rem; padding: 4px 12px; font-weight: 800;">
+                                SELECTIVE_ROTATION
+                            </span>
+                            <span id="mmStrategySourceBadge" class="badge-tag badge-purple" style="font-size: 0.70rem;">
+                                🛡️ INVARIANT GUARDED
+                            </span>
+                            <span id="mmCoiledSpringBadge" class="badge-tag badge-amber" style="font-size: 0.70rem; display: none;" title="FIIs heavily net short (<20% Long). High probability of violent short-covering squeeze.">
+                                ⚡ COILED SPRING SQUEEZE ACTIVE
+                            </span>
+                        </div>
+                        <div style="font-size: 0.76rem; color: var(--text-muted); margin-top: 4px;">
+                            Pure Live NSE 5-Vector Macro Diagnostics • Non-Hallucinatory Core A Deterministic Strategy + LLM Copilot • 2R/3R Actionable Radar
+                        </div>
+                    </div>
+
+                    <div style="display: flex; align-items: center; gap: 0.6rem;">
+                        <button class="btn-primary" style="padding: 0.45rem 1rem; font-size: 0.78rem; font-weight: 700; background: linear-gradient(135deg, var(--accent-cyan), var(--accent-purple)); border: none;" onclick="loadMarketStrategistLive(false)">
+                            ⚡ Synthesize Strategy & Scan
+                        </button>
+                        <button class="btn-secondary" style="padding: 0.45rem 0.85rem; font-size: 0.78rem; border-color: rgba(255,255,255,0.2);" onclick="loadMarketStrategistLive(true)" title="Force live download of fresh NSE derivatives & breadth data">
+                            🔄 Force NSE Refresh
+                        </button>
+                    </div>
+                </div>
+
+                <!-- 24-Hour Regime Delta Alert Banner -->
+                <div class="delta-banner" id="mmDeltaBanner">
+                    <span style="font-size: 1.2rem;">⏱️</span>
+                    <div style="flex: 1;">
+                        <strong style="color: var(--accent-cyan); font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.04em;">24-Hour Macro Regime Delta:</strong>
+                        <span id="mmDeltaSummary" style="margin-left: 6px; color: #e2e8f0;">FII Index Futures held at 11.1% Long. Breadth at 230 Adv / 266 Dec (+17 Net 52W Highs). India VIX at 11.10 (-0.9%). Stance: SELECTIVE_ROTATION.</span>
+                    </div>
+                </div>
+
+                <!-- Macro KPI Quad Strip -->
+                <div class="macro-kpi-grid">
+                    <div class="macro-kpi-card" style="border-color: rgba(0, 240, 255, 0.3);">
+                        <div class="macro-kpi-label" style="color: var(--accent-cyan);">CMMI Composite Mood</div>
+                        <div class="macro-kpi-val" style="color: var(--accent-cyan);" id="mmCmmiScore">53.3 <span style="font-size: 0.8rem; color: var(--text-muted);">/ 100</span></div>
+                        <div class="macro-kpi-sub" id="mmCmmiSub">Institutional Stance: Selective</div>
+                    </div>
+                    <div class="macro-kpi-card" style="border-color: rgba(0, 255, 157, 0.3);">
+                        <div class="macro-kpi-label" style="color: var(--accent-emerald);">Risk Capital Budget</div>
+                        <div class="macro-kpi-val" style="color: var(--accent-emerald);" id="mmRiskBudget">75% <span style="font-size: 0.8rem; color: var(--text-muted);">Capital</span></div>
+                        <div class="macro-kpi-sub" id="mmRiskBudgetSub">Standard Position Allocation</div>
+                    </div>
+                    <div class="macro-kpi-card" style="border-color: rgba(168, 85, 247, 0.3);">
+                        <div class="macro-kpi-label" style="color: var(--accent-purple);">FII Derivatives Stance</div>
+                        <div class="macro-kpi-val" style="color: var(--accent-purple);" id="mmFiiStance">11.1% <span style="font-size: 0.8rem; color: var(--text-muted);">Long</span></div>
+                        <div class="macro-kpi-sub" id="mmFiiStanceSub">Coiled Spring Asymmetry</div>
+                    </div>
+                    <div class="macro-kpi-card" style="border-color: rgba(255, 183, 0, 0.3);">
+                        <div class="macro-kpi-label" style="color: var(--accent-amber);">India VIX Compression</div>
+                        <div class="macro-kpi-val" style="color: var(--accent-amber);" id="mmIndiaVix">11.10</div>
+                        <div class="macro-kpi-sub" id="mmVixSub">Ultra-Low Volatility Coiling</div>
+                    </div>
+                </div>
+
+                <!-- Interactive Tactical Controls & Strategy Override Bar -->
+                <div style="background: rgba(0,0,0,0.35); border: 1px solid var(--border-color); border-radius: 8px; padding: 0.85rem 1rem; display: flex; gap: 1rem; align-items: center; flex-wrap: wrap;">
+                    <div style="display: flex; align-items: center; gap: 0.5rem;">
+                        <span style="font-size: 0.72rem; color: var(--text-dim); text-transform: uppercase; font-weight: 700;">HORIZON:</span>
+                        <div class="filter-pills" id="mmHorizonPills">
+                            <button class="pill-btn active" onclick="setMMHorizon('SWING', this)">📈 Swing (2-4W)</button>
+                            <button class="pill-btn" onclick="setMMHorizon('INTRADAY', this)">⚡ Intraday (1D)</button>
+                            <button class="pill-btn" onclick="setMMHorizon('LONG_TERM', this)">🧬 Long-Term (3-5Y)</button>
+                        </div>
+                    </div>
+
+                    <div style="display: flex; align-items: center; gap: 0.5rem; flex: 1; min-width: 260px;">
+                        <span style="font-size: 0.72rem; color: var(--text-dim); text-transform: uppercase; font-weight: 700;">TACTICAL INTENT:</span>
+                        <input type="text" id="mmUserIntentInput" class="input-control" style="margin-bottom: 0; font-size: 0.76rem;" placeholder="E.g., High relative volume breakouts in Auto or Pharma, RVOL > 2.0x..." onkeydown="if(event.key==='Enter') loadMarketStrategistLive(false)">
+                    </div>
+
+                    <div style="display: flex; align-items: center; gap: 0.5rem;">
+                        <span style="font-size: 0.72rem; color: var(--text-dim); text-transform: uppercase; font-weight: 700;">MIN RVOL:</span>
+                        <input type="range" id="mmRvolSlider" min="1.0" max="4.0" step="0.1" value="1.5" style="width: 90px; accent-color: var(--accent-cyan);" oninput="document.getElementById('mmRvolVal').innerText = this.value + 'x'">
+                        <span id="mmRvolVal" style="font-family: var(--font-mono); font-size: 0.78rem; color: var(--accent-cyan); font-weight: 700; width: 35px;">1.5x</span>
+                    </div>
+
+                    <button class="btn-secondary" style="padding: 0.4rem 0.8rem; font-size: 0.72rem; color: var(--accent-cyan); border-color: rgba(0, 240, 255, 0.4); font-weight: 700;" onclick="copyAllTickersForTradingView()">
+                        📋 Copy All Tickers for TV
+                    </button>
+                </div>
+            </div>
+
+            <!-- Strategist Sub-Workspace Switcher -->
+            <div style="display: flex; justify-content: space-between; align-items: center; gap: 1rem; margin-bottom: 1.25rem; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 0.85rem; flex-wrap: wrap;">
+                <div style="display: flex; gap: 0.6rem;">
+                    <button id="btnSubTabStrategy" class="btn-primary" style="padding: 0.5rem 1.2rem; font-size: 0.82rem; font-weight: 800; display: flex; align-items: center; gap: 6px;" onclick="switchStrategistSubView('strategy')">
+                        <span>🏛️</span> 1. Macro Telemetry & Strategy Funnel
+                    </button>
+                    <button id="btnSubTabRadar" class="btn-secondary" style="padding: 0.5rem 1.2rem; font-size: 0.82rem; font-weight: 800; display: flex; align-items: center; gap: 6px; border-color: rgba(0, 240, 255, 0.4); color: var(--accent-cyan);" onclick="switchStrategistSubView('radar')">
+                        <span>🎯</span> 2. Tomorrow's Follow-Through Probability Radar (Trendlyne-Grade)
+                    </button>
+                </div>
+                <div id="radarQuickStatsStrip" style="font-size: 0.76rem; color: var(--text-muted); font-family: var(--font-mono);">
+                    <span style="color: var(--accent-emerald);">● High Prob: <strong id="kpiHighProbStrip">0</strong></span> &nbsp;|&nbsp;
+                    <span style="color: var(--accent-rose);">● Trap Alerts: <strong id="kpiTrapAlertStrip">0</strong></span> &nbsp;|&nbsp;
+                    <span style="color: var(--accent-cyan);">● Avg Deliv: <strong id="kpiAvgDelivStrip">0%</strong></span>
+                </div>
+            </div>
+
+            <!-- SUB-VIEW 1: Macro Telemetry & 2R/3R Strategy Funnel -->
+            <div id="viewStrategistMacro">
+                <!-- Two-Column Analytics Layout: 5-Vector Telemetry (Left) vs CIO Memo & Explainable Filters (Right) -->
+                <div class="two-column-analytics">
+                    <!-- LEFT COLUMN: The 5 Grounded Market Mood Vectors -->
+                    <div>
+                        <div style="font-size: 0.85rem; font-weight: 800; color: #fff; margin-bottom: 0.75rem; display: flex; align-items: center; gap: 6px;">
+                            <span>📡</span> THE 5 GROUNDED LIVE MARKET MOOD VECTORS
+                        </div>
+
+                    <!-- Vector 1: Derivatives Positioning -->
+                    <div class="vector-card">
+                        <div class="vector-header">
+                            <span class="vector-title">📊 1. Derivatives Positioning (NSE Live)</span>
+                            <span class="badge-tag badge-purple" id="mmPosStanceBadge" style="font-size: 0.65rem;">COILED SPRING</span>
+                        </div>
+                        <div style="display: flex; justify-content: space-between; font-size: 0.74rem; font-family: var(--font-mono); margin-bottom: 2px;">
+                            <span style="color: var(--accent-emerald);">FII Long: <strong id="mmFiiLongVal">11.1%</strong></span>
+                            <span style="color: var(--accent-rose);">FII Short: <strong id="mmFiiShortVal">88.9%</strong></span>
+                        </div>
+                        <div class="split-bar-container">
+                            <div class="split-bar-fill" id="mmFiiSplitBar" style="width: 11.1%;"></div>
+                        </div>
+                        <div style="display: flex; justify-content: space-between; font-size: 0.70rem; color: var(--text-dim); margin-top: 4px;">
+                            <span>Client Long: <strong style="color: #fff;" id="mmClientLongVal">56.2%</strong></span>
+                            <span>Index Options PCR: <strong style="color: var(--accent-cyan);" id="mmPcrVal">0.84</strong></span>
+                            <span id="mmSessionDateVal">NSE Official FAO</span>
+                        </div>
+                    </div>
+
+                    <!-- Vector 2: Market Breadth & Expansion -->
+                    <div class="vector-card">
+                        <div class="vector-header">
+                            <span class="vector-title">🌊 2. Market Breadth & Leadership Expansion</span>
+                            <span class="badge-tag badge-emerald" id="mmBreadthBadge" style="font-size: 0.65rem;">EXPANDING</span>
+                        </div>
+                        <div style="display: flex; justify-content: space-between; font-size: 0.74rem; font-family: var(--font-mono); margin-bottom: 2px;">
+                            <span style="color: var(--accent-emerald);">Advances: <strong id="mmAdvCount">230</strong></span>
+                            <span style="color: var(--accent-rose);">Declines: <strong id="mmDecCount">266</strong></span>
+                        </div>
+                        <div class="split-bar-container">
+                            <div class="split-bar-fill" id="mmBreadthSplitBar" style="width: 46.4%;"></div>
+                        </div>
+                        <div style="display: flex; justify-content: space-between; font-size: 0.70rem; color: var(--text-dim); margin-top: 4px;">
+                            <span>A/D Ratio: <strong style="color: #fff;" id="mmAdRatioVal">0.86</strong></span>
+                            <span>Net 52W Highs: <strong style="color: var(--accent-emerald);" id="mmNetHighsVal">+17 Highs</strong></span>
+                            <span>(H: <span id="mmHighsCountVal">21</span> / L: <span id="mmLowsCountVal">4</span>)</span>
+                        </div>
+                    </div>
+
+                    <!-- Vector 3: Volatility Compression -->
+                    <div class="vector-card">
+                        <div class="vector-header">
+                            <span class="vector-title">🌪️ 3. Volatility Compression Regime</span>
+                            <span class="badge-tag badge-amber" id="mmVixRegimeBadge" style="font-size: 0.65rem;">COMPRESSED</span>
+                        </div>
+                        <div style="display: flex; justify-content: space-between; align-items: center; font-size: 0.78rem;">
+                            <div>
+                                <span style="font-size: 1.15rem; font-weight: 800; font-family: var(--font-mono); color: var(--accent-amber);" id="mmVixLevel">11.10</span>
+                                <span style="font-size: 0.72rem; color: var(--text-muted); margin-left: 4px;" id="mmVixDelta">(-0.9%)</span>
+                            </div>
+                            <div style="font-size: 0.72rem; color: var(--text-dim); text-align: right;">
+                                <div>Threshold: &lt; 13.5 (Coiled)</div>
+                                <div style="color: var(--accent-emerald);">Option Sellers Anchored</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Vector 4: Market Dispersion & Spreads -->
+                    <div class="vector-card">
+                        <div class="vector-header">
+                            <span class="vector-title">📐 4. Dispersion & Risk Appetite Spreads</span>
+                            <span class="badge-tag badge-cyan" id="mmSpreadBadge" style="font-size: 0.65rem;">BROADENING</span>
+                        </div>
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; font-size: 0.74rem;">
+                            <div style="background: rgba(0,0,0,0.25); padding: 6px 8px; border-radius: 4px;">
+                                <div style="color: var(--text-dim); font-size: 0.65rem;">MIDCAP 150 vs NIFTY 50</div>
+                                <strong style="color: var(--accent-emerald); font-family: var(--font-mono);" id="mmMidcapSpreadVal">+0.73% Alpha</strong>
+                            </div>
+                            <div style="background: rgba(0,0,0,0.25); padding: 6px 8px; border-radius: 4px;">
+                                <div style="color: var(--text-dim); font-size: 0.65rem;">FII + DII CASH FLOW</div>
+                                <strong style="color: var(--accent-cyan); font-family: var(--font-mono);" id="mmCashFlowVal">+₹2,698 Cr Net</strong>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Vector 5: Sector Relative Rotation Graph (RRG) -->
+                    <div class="vector-card">
+                        <div class="vector-header">
+                            <span class="vector-title">🔄 5. Sector Relative Rotation Matrix (RRG)</span>
+                            <span class="badge-tag badge-purple" style="font-size: 0.65rem;">14 NSE INDICES</span>
+                        </div>
+                        <div style="margin-bottom: 6px;">
+                            <div style="font-size: 0.68rem; color: var(--accent-emerald); font-weight: 700; margin-bottom: 2px;">● LEADING / ROTATING HIGHER:</div>
+                            <div id="mmLeadingChips">
+                                <span class="rrg-chip" style="background: rgba(0, 255, 157, 0.12); color: var(--accent-emerald); border: 1px solid rgba(0, 255, 157, 0.3);">Nifty Auto (+1.4%)</span>
+                                <span class="rrg-chip" style="background: rgba(0, 255, 157, 0.12); color: var(--accent-emerald); border: 1px solid rgba(0, 255, 157, 0.3);">Nifty Pharma (+0.9%)</span>
+                                <span class="rrg-chip" style="background: rgba(0, 255, 157, 0.12); color: var(--accent-emerald); border: 1px solid rgba(0, 255, 157, 0.3);">Nifty PSU Bank (+0.8%)</span>
+                            </div>
+                        </div>
+                        <div>
+                            <div style="font-size: 0.68rem; color: var(--accent-amber); font-weight: 700; margin-bottom: 2px;">● IMPROVING / DEFENSIVE:</div>
+                            <div id="mmImprovingChips">
+                                <span class="rrg-chip" style="background: rgba(255, 183, 0, 0.12); color: var(--accent-amber); border: 1px solid rgba(255, 183, 0, 0.3);">Nifty FMCG (+0.4%)</span>
+                                <span class="rrg-chip" style="background: rgba(255, 183, 0, 0.12); color: var(--accent-amber); border: 1px solid rgba(255, 183, 0, 0.3);">Nifty Realty (+0.3%)</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- RIGHT COLUMN: CIO Strategic Memo, Explainable Filter Matrix & Sieve Waterfall -->
+                <div>
+                    <!-- CIO Strategic Memo -->
+                    <div class="cio-memo-card">
+                        <div class="cio-memo-title" style="display: flex; justify-content: space-between; align-items: center;">
+                            <span style="display: flex; align-items: center; gap: 6px;">
+                                <span>🧠</span> CIO EXECUTIVE STRATEGY MEMO
+                            </span>
+                            <button class="ai-toolbar-btn" style="font-size: 0.70rem; padding: 3px 9px; font-weight: 700; color: var(--accent-cyan); border-color: rgba(0,240,255,0.4);" onclick="openMacroMemoModal()" title="Open Comprehensive 4-Seat Macro Investment Committee Memo">
+                                📜 Read Macro Memo
+                            </button>
+                        </div>
+                        <div class="cio-memo-body" id="mmCioMemo">
+                            "Selective rotation regime active. Market breadth is expanding (+17 Net 52W Highs) with Midcap 150 outperforming Nifty 50 by +0.73%. FII futures positioning is heavily short (11.1% Long), creating coiled-spring short-covering asymmetry. Deploying 75% risk budget into High Relative Volume breakouts in leading sectors (Auto, Pharma, PSU Bank) with 3.5% to 6.5% ATR-anchored stops."
+                        </div>
+                    </div>
+
+                    <!-- Explainable Filter Matrix ("Why This Filter?") -->
+                    <div style="margin-bottom: 1.25rem;">
+                        <div style="font-size: 0.85rem; font-weight: 800; color: #fff; margin-bottom: 0.6rem; display: flex; justify-content: space-between; align-items: center;">
+                            <span style="display: flex; align-items: center; gap: 6px;">
+                                <span>🔍</span> EXPLAINABLE FILTER MATRIX ("WHY THIS FILTER?")
+                            </span>
+                            <span class="badge-tag badge-cyan" style="font-size: 0.65rem;">ZERO BLACK BOX</span>
+                        </div>
+                        <div id="mmExplainableFiltersList">
+                            <!-- Populated dynamically -->
+                        </div>
+                    </div>
+
+                    <!-- Filter Attrition Waterfall ("The Sieve") -->
+                    <div style="background: rgba(0,0,0,0.35); border: 1px solid var(--border-color); border-radius: 8px; padding: 1rem;">
+                        <div style="font-size: 0.80rem; font-weight: 800; color: #fff; margin-bottom: 0.6rem; display: flex; justify-content: space-between; align-items: center;">
+                            <span style="display: flex; align-items: center; gap: 6px;">
+                                <span>🌪️</span> FILTER ATTRITION WATERFALL ("THE SIEVE")
+                            </span>
+                            <span style="font-size: 0.70rem; color: var(--accent-cyan); font-family: var(--font-mono);">5,240 → <span id="mmSieveFinalCount">10</span> STOCKS</span>
+                        </div>
+                        <div id="mmSieveWaterfallContainer">
+                            <!-- Populated dynamically -->
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Actionable 2R/3R Execution Trade Cards Section -->
+            <div style="margin-top: 1rem;">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; flex-wrap: wrap; gap: 0.75rem;">
+                    <div>
+                        <div style="display: flex; align-items: center; gap: 0.5rem;">
+                            <span style="font-size: 1.3rem;">🎯</span>
+                            <h3 style="font-size: 1.15rem; font-weight: 800; color: #fff;">
+                                Actionable 2R / 3R Execution Setups
+                            </h3>
+                            <span class="badge-tag badge-emerald" id="mmSetupCountBadge">10 Setups Found</span>
+                        </div>
+                        <div style="font-size: 0.74rem; color: var(--text-muted); margin-top: 2px;">
+                            Strict bracket architecture: Stop-loss anchored to ATR/20-EMA • 2R/3R asymmetric targets • Direct TradingView chart links
+                        </div>
+                    </div>
+
+                    <div style="display: flex; gap: 0.5rem; align-items: center;">
+                        <button class="btn-primary" style="padding: 0.45rem 1rem; font-size: 0.76rem; font-weight: 700; display: flex; align-items: center; gap: 6px;" onclick="copyAllTickersForTradingView()">
+                            <span>📋</span> Copy All Tickers for TradingView Watchlist
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Cards Grid -->
+                <div id="mmTradeCardsGrid" class="cards-grid">
+                    <div style="color: var(--accent-cyan); padding: 3rem; text-align: center; grid-column: 1 / -1;">
+                        ⏳ Loading live 5-vector market intelligence and actionable trade setups...
+                    </div>
+                </div>
+            </div>
+            </div> <!-- End of viewStrategistMacro -->
+
+            <!-- SUB-VIEW 2: Tomorrow's Follow-Through Probability Radar (Trendlyne-Grade Alpha Decoupling) -->
+            <div id="viewStrategistRadar" style="display: none;">
+                <!-- Radar Header & Control Bar -->
+                <div style="background: rgba(15, 23, 42, 0.7); border: 1px solid rgba(0, 240, 255, 0.2); border-radius: 10px; padding: 1rem 1.25rem; margin-bottom: 1.25rem;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; gap: 1rem; flex-wrap: wrap; margin-bottom: 1rem;">
+                        <div>
+                            <div style="display: flex; align-items: center; gap: 8px;">
+                                <span style="font-size: 1.4rem;">🎯</span>
+                                <h3 style="font-size: 1.15rem; font-weight: 900; color: #fff; letter-spacing: -0.01em;">
+                                    Tomorrow's Follow-Through & Continuation Probability Radar
+                                </h3>
+                                <span class="badge-tag badge-cyan" style="font-size: 0.70rem; font-weight: 800;">
+                                    AUTHENTIC NSE DELIVERY BHAVCOPY
+                                </span>
+                            </div>
+                            <div style="font-size: 0.75rem; color: var(--text-muted); margin-top: 3px;">
+                                Ingests 100% genuine NSE Security-Wise Delivery position reports • 3-Day Delivery Trajectory d(Delivery)/dt • Float Absorption (FSAR) • 9:15 AM ORB-15 Playbook
+                            </div>
+                        </div>
+
+                        <!-- Horizon Toggle Pills -->
+                        <div style="display: flex; gap: 6px; align-items: center; background: rgba(0,0,0,0.4); padding: 4px 6px; border-radius: 8px; border: 1px solid var(--border-color);">
+                            <span style="font-size: 0.70rem; color: var(--text-dim); font-weight: 700; margin-right: 4px; text-transform: uppercase;">Horizon:</span>
+                            <button class="radar-horizon-pill active" id="btnHorizonToday" onclick="setRadarHorizon('TODAY')">
+                                ⚡ Today's Gainers (1D)
+                            </button>
+                            <button class="radar-horizon-pill" id="btnHorizonWeekly" onclick="setRadarHorizon('WEEKLY')">
+                                📅 Weekly Leaders (1W)
+                            </button>
+                            <button class="radar-horizon-pill" id="btnHorizonYearly" onclick="setRadarHorizon('YEARLY')">
+                                🏆 Yearly Compounders (1Y)
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Data Provenance & Macro Wind Telemetry Ribbon -->
+                    <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-top: 6px; padding-bottom: 0.5rem;">
+                        <span id="radarProvenancePill" class="badge-tag" style="background: rgba(16,185,129,0.12); color: var(--accent-emerald); border: 1px solid rgba(16,185,129,0.3); font-size: 0.72rem; padding: 4px 10px; font-weight: 700;">
+                            🟢 NSE Delivery: EOD Confirmed
+                        </span>
+                        <span id="radarMacroWindPill" class="badge-tag" style="background: rgba(0,240,255,0.1); color: var(--accent-cyan); border: 1px solid rgba(0,240,255,0.3); font-size: 0.72rem; padding: 4px 10px; font-weight: 700;">
+                            🌬️ Macro Wind: CMMI 53.3 (Neutral)
+                        </span>
+                        <span id="radarCircuitCountPill" class="badge-tag" style="background: rgba(234,179,8,0.12); color: #eab308; border: 1px solid rgba(234,179,8,0.3); font-size: 0.72rem; padding: 4px 10px; font-weight: 700;">
+                            🔒 Upper Circuit Locked: 0 Setups
+                        </span>
+                    </div>
+
+                    <!-- Filter Chips & Actions Ribbon -->
+                    <div style="display: flex; justify-content: space-between; align-items: center; gap: 1rem; flex-wrap: wrap; padding-top: 0.75rem; border-top: 1px solid rgba(255,255,255,0.08);">
+                        <div style="display: flex; gap: 6px; align-items: center; flex-wrap: wrap;">
+                            <span style="font-size: 0.70rem; color: var(--text-dim); font-weight: 700; text-transform: uppercase;">Sieve:</span>
+                            <button class="radar-chip active" id="chipFilterAll" onclick="setRadarFilter('ALL')">
+                                All Candidates
+                            </button>
+                            <button class="radar-chip" id="chipFilterHighProb" onclick="setRadarFilter('HIGH_PROB')">
+                                🚀 High Follow-Through (≥70%)
+                            </button>
+                            <button class="radar-chip" id="chipFilterPullback" onclick="setRadarFilter('PULLBACK')">
+                                📈 Pullback Retest (60-70%)
+                            </button>
+                            <button class="radar-chip" id="chipFilterCircuit" onclick="setRadarFilter('CIRCUIT')">
+                                🔒 Upper Circuits (Freeze)
+                            </button>
+                            <button class="radar-chip" id="chipFilterDelivery" onclick="setRadarFilter('DELIVERY')">
+                                📦 Delivery Spikes (≥40%)
+                            </button>
+                            <button class="radar-chip" id="chipFilterTrap" onclick="setRadarFilter('TRAP')">
+                                ⚠️ Retail Trap Alerts (&lt;45%)
+                            </button>
+                        </div>
+
+                        <div style="display: flex; gap: 0.6rem; align-items: center; flex-wrap: wrap;">
+                            <!-- View Mode Switcher -->
+                            <div style="display: flex; background: rgba(0,0,0,0.5); border-radius: 6px; padding: 2px; border: 1px solid rgba(255,255,255,0.12);">
+                                <button id="btnRadarViewCards" class="radar-view-pill active" onclick="setRadarViewMode('CARDS')" title="Visual Cards Grid View">
+                                    🎴 Cards
+                                </button>
+                                <button id="btnRadarViewTable" class="radar-view-pill" onclick="setRadarViewMode('TABLE')" title="High-Density Spreadsheet View">
+                                    📑 Data Table
+                                </button>
+                            </div>
+
+                            <div style="display: flex; align-items: center; gap: 6px;">
+                                <span style="font-size: 0.70rem; color: var(--text-dim); text-transform: uppercase; font-weight: 700;">Sort:</span>
+                                <select id="radarSortSelect" class="input-control" style="margin-bottom: 0; padding: 0.35rem 0.6rem; font-size: 0.72rem;" onchange="loadRadarDataLive()">
+                                    <option value="probability">Continuation Probability (Desc)</option>
+                                    <option value="delivery_pct">NSE Delivery % (Desc)</option>
+                                    <option value="gain">Gain / Relative Return (Desc)</option>
+                                    <option value="clv">Close Location Value (CLV)</option>
+                                </select>
+                            </div>
+                            <button class="btn-secondary" style="padding: 0.35rem 0.8rem; font-size: 0.74rem;" onclick="loadRadarDataLive(true)">
+                                🔄 Refresh
+                            </button>
+                            <button class="btn-primary" style="padding: 0.35rem 0.9rem; font-size: 0.74rem; font-weight: 700;" onclick="copyRadarTickers()">
+                                📋 Copy Tickers for TV
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Radar Telemetry Quad (Live Summary Stats) -->
+                <div class="macro-kpi-grid" style="margin-bottom: 1.25rem;">
+                    <div class="macro-kpi-card" style="border-color: rgba(0, 240, 255, 0.3);">
+                        <div class="macro-kpi-label" style="color: var(--accent-cyan);">Total Equities Evaluated</div>
+                        <div class="macro-kpi-val" style="color: var(--accent-cyan);" id="kpiRadarTotal">0</div>
+                        <div class="macro-kpi-sub" id="kpiRadarHorizonSub">Horizon: Today's 1D Outperformers</div>
+                    </div>
+                    <div class="macro-kpi-card" style="border-color: rgba(16, 185, 129, 0.3);">
+                        <div class="macro-kpi-label" style="color: var(--accent-emerald);">High Conviction Follow-Through</div>
+                        <div class="macro-kpi-val" style="color: var(--accent-emerald);" id="kpiRadarHighProb">0 <span style="font-size: 0.8rem; color: var(--text-muted);">Setups</span></div>
+                        <div class="macro-kpi-sub">Probability ≥ 70% (Institutional Backing)</div>
+                    </div>
+                    <div class="macro-kpi-card" style="border-color: rgba(59, 130, 246, 0.3);">
+                        <div class="macro-kpi-label" style="color: #60a5fa;">Institutional Delivery Sponsorship</div>
+                        <div class="macro-kpi-val" style="color: #60a5fa;" id="kpiRadarInstDeliv">0 <span style="font-size: 0.8rem; color: var(--text-muted);">Stocks</span></div>
+                        <div class="macro-kpi-sub" id="kpiRadarAvgDeliv">Average Delivery: 0.0%</div>
+                    </div>
+                    <div class="macro-kpi-card" style="border-color: rgba(239, 68, 68, 0.3);">
+                        <div class="macro-kpi-label" style="color: var(--accent-rose);">Retail Churn / Trap Alerts</div>
+                        <div class="macro-kpi-val" style="color: var(--accent-rose);" id="kpiRadarTrapCount">0 <span style="font-size: 0.8rem; color: var(--text-muted);">Traps</span></div>
+                        <div class="macro-kpi-sub">Delivery &lt; 18% or Upper Wick &gt; 35%</div>
+                    </div>
+                </div>
+
+                <!-- View 1: Radar Responsive Actionable Cards Grid -->
+                <div id="radarCardsGrid" class="radar-cards-grid">
+                    <div style="color: var(--accent-cyan); padding: 3rem; text-align: center; grid-column: 1 / -1;">
+                        ⏳ Loading live Continuation Probability Radar...
+                    </div>
+                </div>
+
+                <!-- View 2: Radar Institutional Data Table View -->
+                <div id="radarTableContainer" style="display: none; margin-top: 1.25rem; overflow-x: auto; background: rgba(15, 23, 42, 0.85); border: 1px solid var(--border-color); border-radius: 10px; box-shadow: 0 8px 24px rgba(0,0,0,0.4);">
+                    <table class="radar-data-table">
+                        <thead>
+                            <tr>
+                                <th style="text-align: left;">Symbol & Setup</th>
+                                <th style="text-align: right;">CMP & Gain</th>
+                                <th style="text-align: center;">Continuation Prob</th>
+                                <th style="text-align: left;">Verdict & State</th>
+                                <th style="text-align: right;">Delivery %</th>
+                                <th style="text-align: right;">Float Locked (FSAR)</th>
+                                <th style="text-align: right;">CLV %</th>
+                                <th style="text-align: right;">Upper Wick</th>
+                                <th style="text-align: right;">RVOL</th>
+                                <th style="text-align: center;">Execution Bracket (Entry / SL / 2R)</th>
+                                <th style="text-align: center;">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="radarTableBody">
+                            <!-- Populated via JS -->
+                        </tbody>
+                    </table>
+                </div>
             </div>
         </div>
 
@@ -1574,6 +2560,10 @@
             } else if (tabId === 'tab-screener') {
                 if (!currentScreenerData) {
                     runPresetScreen('MULTIBAGGER_INFLECTION_PRESET');
+                }
+            } else if (tabId === 'tab-market-strategist') {
+                if (!currentMarketStrategistData) {
+                    loadMarketStrategistLive(false);
                 }
             }
         }
@@ -2109,6 +3099,7 @@
                                 <h2 style="font-size:1.6rem; font-weight:900; color:#fff;">${s.symbol}</h2>
                                 <span class="badge-tag badge-purple">${s.sector || 'N/A'}</span>
                                 <span class="badge-tag ${p5.badge_class || 'badge-emerald'}">${(p5.tier || s.primary_verdict || 'N/A').replace(/_/g, ' ')}</span>
+                                <button class="btn-secondary" style="padding:0.25rem 0.65rem; font-size:0.72rem; color:var(--accent-purple); border-color:rgba(168,85,247,0.4); font-weight:700;" onclick="openAIDeepDiveModal('${s.symbol}')" title="Read 4-Seat Adversarial Institutional Memo">🤖 AI Memo</button>
                                 <button class="btn-secondary" style="padding:0.25rem 0.65rem; font-size:0.72rem; color:var(--accent-emerald); border-color:rgba(0,255,157,0.4); font-weight:700;" onclick="addToIntradayBasket('${s.symbol}')">🎯 +Focus Tape</button>
                                 <button class="btn-secondary" style="padding:0.25rem 0.65rem; font-size:0.72rem; color:var(--accent-cyan); border-color:rgba(0,240,255,0.4); font-weight:700;" onclick="openLiveTapeTicket('${s.symbol}')">⚡ MIS Ticket</button>
                             </div>
@@ -2600,11 +3591,14 @@
             badge.className = "badge-tag badge-emerald";
 
             const candidates = data.candidates || [];
+            const longTermFeed = data.long_term_feed || [];
             const strategicFeed = data.strategic_watchlist_feed || [];
             const swingFeed = data.swing_feed || [];
             const intradayFeed = data.intraday_feed || [];
 
             document.getElementById('scCountAll').innerText = candidates.length;
+            const countLtEl = document.getElementById('scCountLongTerm');
+            if (countLtEl) countLtEl.innerText = longTermFeed.length;
             document.getElementById('scCountStrategic').innerText = strategicFeed.length;
             document.getElementById('scCountSwing').innerText = swingFeed.length;
             document.getElementById('scCountIntraday').innerText = intradayFeed.length;
@@ -2615,6 +3609,16 @@
                 grid.innerHTML = `<div style="color:var(--text-muted); padding:2rem;">No candidates matched the filter criteria. Try relaxing the bounds.</div>`;
             } else {
                 grid.innerHTML = candidates.map(c => renderCandidateCard(c)).join('');
+            }
+
+            // Render Long-Term Conviction Compounders Grid
+            const ltGrid = document.getElementById('screenerLongTermGrid');
+            if (ltGrid) {
+                if (!longTermFeed.length) {
+                    ltGrid.innerHTML = `<div style="color:var(--text-muted); padding:2rem;">No candidates currently meet strict CONVICTION_BUY criteria (Business Potential >= 85 & Asymmetry Gap >= +8%). Check Strategic Watchlist.</div>`;
+                } else {
+                    ltGrid.innerHTML = longTermFeed.map(c => renderCandidateCard(c)).join('');
+                }
             }
 
             // Render Strategic Watchlist Grid
@@ -3022,6 +4026,7 @@
 
             document.getElementById(subTabId).style.display = 'block';
             if (subTabId === 'sc-all') document.getElementById('subTabAllBtn').classList.add('active');
+            if (subTabId === 'sc-longterm') document.getElementById('subTabLongTermBtn').classList.add('active');
             if (subTabId === 'sc-strategic') document.getElementById('subTabStrategicBtn').classList.add('active');
             if (subTabId === 'sc-swing') document.getElementById('subTabSwingBtn').classList.add('active');
             if (subTabId === 'sc-intraday') document.getElementById('subTabIntradayBtn').classList.add('active');
@@ -3279,6 +4284,92 @@
             if (fsBtn) {
                 fsBtn.innerHTML = '<span>⛶</span> Fullscreen';
                 fsBtn.classList.remove('active');
+            }
+        }
+
+        async function openMacroMemoModal() {
+            currentAnalystSymbol = "NSE_MACRO";
+            currentAnalystMemoRawText = "";
+            const modal = document.getElementById('aiAnalystModal');
+            const titleEl = document.getElementById('aiAnalystTitle');
+            const sectorEl = document.getElementById('aiAnalystSectorBadge');
+            const providerEl = document.getElementById('aiAnalystProviderBadge');
+            const subtitleEl = document.getElementById('aiAnalystSubtitle');
+            const bodyEl = document.getElementById('aiAnalystBody');
+
+            // Hide quarterly trajectory and news bars
+            const trajBar = document.getElementById('aiQuarterlyTrajectoryBar');
+            if (trajBar) trajBar.style.display = 'none';
+            const newsBar = document.getElementById('aiLiveNewsBar');
+            if (newsBar) newsBar.style.display = 'none';
+
+            // Ensure Telemetry drawer is visible
+            const telemetryDrawer = document.getElementById('aiTelemetryDrawer');
+            if (telemetryDrawer) telemetryDrawer.style.display = 'block';
+
+            titleEl.innerText = "Macro Market Mood & Strategy Memo";
+            sectorEl.innerText = "NSE MACRO REGIME";
+            providerEl.className = "badge-tag badge-purple";
+            providerEl.innerText = "SYNTHESIZING";
+            subtitleEl.innerText = "Synthesizing 5 Grounded NSE Macro Vectors (Derivatives, Breadth, VIX, Spreads, RRG)...";
+
+            bodyEl.innerHTML = `
+                <div style="display:flex; flex-direction:column; align-items:center; justify-content:center; padding:4rem 1rem; color:var(--text-muted); gap:1.2rem;">
+                    <div style="font-size:2.5rem; animation:spin 1.5s linear infinite;">🏛️</div>
+                    <div style="font-size:1.05rem; font-weight:700; color:var(--accent-cyan);">Convening Institutional Macro Investment Committee...</div>
+                    <div style="font-size:0.82rem; color:var(--text-dim); max-width:540px; text-align:center; line-height:1.6;">
+                        Debating FII derivatives positioning, India VIX volatility compression, breadth leadership expansion, and 4-seat macro capital allocation.
+                    </div>
+                </div>
+            `;
+
+            modal.style.display = 'flex';
+
+            try {
+                const resp = await fetch('/api/screener/macro-memo');
+                const res = await resp.json();
+
+                if (!res.success) {
+                    bodyEl.innerHTML = `
+                        <div style="background:rgba(255,0,85,0.08); border:1px solid rgba(255,0,85,0.3); border-radius:8px; padding:1.75rem; text-align:center;">
+                            <div style="color:var(--accent-rose); font-weight:700; font-size:1rem; margin-bottom:0.5rem;">Failed to Generate Macro Memo</div>
+                            <div style="font-size:0.84rem; color:var(--text-muted); margin-bottom:1.2rem;">${res.error || 'Unknown error occurred'}</div>
+                            <button class="btn-primary" onclick="openMacroMemoModal()">Retry</button>
+                        </div>
+                    `;
+                    return;
+                }
+
+                currentAnalystMemoRawText = res.macro_memo_md || "";
+
+                titleEl.innerText = `Macro Strategy Memo — ${res.regime}`;
+                sectorEl.innerText = `CMMI ${res.cmmi_score}/100`;
+                providerEl.className = "badge-tag badge-cyan";
+                providerEl.innerText = "🏛️ INSTITUTIONAL STRATEGIST";
+                subtitleEl.innerText = `5-Vector Invariant Guarded • Executed in ${res.execution_time_ms} ms`;
+
+                // Update KPI Drawer labels with Macro context
+                document.getElementById('aiKpiCmp').innerText = `${res.cmmi_score}/100`;
+                document.getElementById('aiKpiRoce').innerText = `${res.risk_budget_pct}%`;
+                const deriv = currentMarketStrategistData?.market_intelligence?.derivatives_positioning || {};
+                const breadth = currentMarketStrategistData?.market_intelligence?.market_breadth || {};
+                const vix = currentMarketStrategistData?.market_intelligence?.volatility_regime || {};
+                document.getElementById('aiKpiDe').innerText = `${deriv.fii_index_future_long_pct || 11.1}%L`;
+                document.getElementById('aiKpiPledge').innerText = `${vix.india_vix || 11.10}`;
+                document.getElementById('aiKpiPivot').innerText = `${breadth.advances || 230}A/${breadth.declines || 266}D`;
+                const netH = breadth.net_new_52w_highs || 17;
+                document.getElementById('aiKpiBreakeven').innerText = `${netH >= 0 ? '+' : ''}${netH}H`;
+
+                // Render Markdown Memo
+                bodyEl.innerHTML = renderAIMemoHTML(res.macro_memo_md);
+
+            } catch (err) {
+                bodyEl.innerHTML = `
+                    <div style="background:rgba(255,0,85,0.08); border:1px solid rgba(255,0,85,0.3); border-radius:8px; padding:1.75rem; text-align:center;">
+                        <div style="color:var(--accent-rose); font-weight:700;">Network / Server Exception</div>
+                        <div style="font-size:0.80rem; color:var(--text-muted); margin-top:4px;">${err.message}</div>
+                    </div>
+                `;
             }
         }
 
@@ -3802,6 +4893,906 @@
                 badge.className = 'badge-tag badge-rose';
                 badge.innerText = '🔴 NSE: CLOSED';
             }
+        }
+
+        /* Market Mood & AI Strategist Client Logic */
+        let currentMarketStrategistData = null;
+        let currentMMHorizon = 'SWING';
+
+        function setMMHorizon(horizon, btn) {
+            currentMMHorizon = horizon;
+            const container = document.getElementById('mmHorizonPills');
+            if (container) {
+                container.querySelectorAll('.pill-btn').forEach(b => b.classList.remove('active'));
+            }
+            if (btn) btn.classList.add('active');
+            loadMarketStrategistLive(false);
+        }
+
+        async function loadMarketStrategistLive(forceRefresh = false) {
+            const grid = document.getElementById('mmTradeCardsGrid');
+            if (grid) {
+                grid.innerHTML = `
+                    <div style="color: var(--accent-cyan); padding: 3rem; text-align: center; grid-column: 1 / -1;">
+                        <div style="font-size: 1.5rem; margin-bottom: 0.5rem;">⚡</div>
+                        <strong>Synthesizing Adaptive Strategy & Scanning 5,000+ Equities...</strong>
+                        <div style="font-size: 0.74rem; color: var(--text-dim); margin-top: 4px;">
+                            Ingesting 5 live NSE macro vectors (Derivatives, Breadth, VIX, Spreads, RRG) via Invariant Firewall
+                        </div>
+                    </div>
+                `;
+            }
+
+            const userIntent = (document.getElementById('mmUserIntentInput')?.value || '').trim();
+            const minRvol = document.getElementById('mmRvolSlider')?.value || '1.5';
+
+            try {
+                const queryParams = new URLSearchParams({
+                    horizon: currentMMHorizon,
+                    intent: userIntent,
+                    min_rvol: minRvol,
+                    refresh: forceRefresh ? 'true' : 'false',
+                    limit: '15'
+                });
+
+                const resp = await fetch(`/api/screener/market-intelligence?${queryParams.toString()}`);
+                const data = await resp.json();
+
+                if (!data.success) {
+                    if (grid) {
+                        grid.innerHTML = `
+                            <div style="color: var(--accent-rose); padding: 2rem; text-align: center; grid-column: 1 / -1;">
+                                ❌ Error loading market intelligence: ${data.error || 'Unknown error'}
+                            </div>
+                        `;
+                    }
+                    return;
+                }
+
+                currentMarketStrategistData = data;
+                renderMarketStrategist(data);
+            } catch (err) {
+                console.error("Failed to load market intelligence:", err);
+                if (grid) {
+                    grid.innerHTML = `
+                        <div style="color: var(--accent-rose); padding: 2rem; text-align: center; grid-column: 1 / -1;">
+                            ❌ Network error loading market intelligence: ${err.message}
+                        </div>
+                    `;
+                }
+            }
+        }
+
+        function renderMarketStrategist(data) {
+            const intel = data.market_intelligence || {};
+            const ast = data.strategy_ast || {};
+            const cards = data.cards || [];
+            const filters = data.applied_filters || [];
+            const sieve = data.sieve_waterfall || [];
+            const delta = data.delta_24h || {};
+            const deriv = intel.derivatives_positioning || {};
+            const breadth = intel.market_breadth || {};
+            const vix = intel.volatility_regime || {};
+            const spreads = intel.market_dispersion_spreads || {};
+            const flows = intel.institutional_flows_cash || {};
+            const rot = intel.sector_rotation_matrix || {};
+
+            // 1. Top Ribbon & Badges
+            const regimeBadge = document.getElementById('mmRegimeBadge');
+            if (regimeBadge) {
+                const regime = ast.regime || intel.overall_regime || 'SELECTIVE_ROTATION';
+                regimeBadge.innerText = regime;
+                if (regime === 'BULLISH_EXPANSION') regimeBadge.className = 'badge-tag badge-emerald';
+                else if (regime === 'SELECTIVE_ROTATION') regimeBadge.className = 'badge-tag badge-cyan';
+                else if (regime === 'DEFENSIVE_CONSOLIDATION') regimeBadge.className = 'badge-tag badge-amber';
+                else regimeBadge.className = 'badge-tag badge-rose';
+            }
+
+            const sourceBadge = document.getElementById('mmStrategySourceBadge');
+            if (sourceBadge) {
+                sourceBadge.innerText = (data.strategy_source === 'LLM_COPILOT' || data.strategy_source === 'LLM_GROUNDED_COPILOT') 
+                    ? '🤖 LLM STRATEGIST (INVARIANT FIREWALL)' 
+                    : '⚙️ DETERMINISTIC QUANT CORE A';
+            }
+
+            const coiledBadge = document.getElementById('mmCoiledSpringBadge');
+            if (coiledBadge) {
+                coiledBadge.style.display = (intel.is_coiled_spring || delta.is_coiled_spring) ? 'inline-block' : 'none';
+            }
+
+            const deltaSummary = document.getElementById('mmDeltaSummary');
+            if (deltaSummary && delta.summary) {
+                deltaSummary.innerText = delta.summary;
+            }
+
+            // Top Quad KPIs
+            const cmmiScoreEl = document.getElementById('mmCmmiScore');
+            if (cmmiScoreEl) cmmiScoreEl.innerHTML = `${data.cmmi_score ?? 50.0} <span style="font-size: 0.8rem; color: var(--text-muted);">/ 100</span>`;
+            
+            const cmmiSubEl = document.getElementById('mmCmmiSub');
+            if (cmmiSubEl) cmmiSubEl.innerText = `Regime: ${ast.regime || intel.overall_regime || 'Selective'}`;
+
+            const riskBudgetEl = document.getElementById('mmRiskBudget');
+            if (riskBudgetEl) riskBudgetEl.innerHTML = `${data.risk_budget_pct ?? 75}% <span style="font-size: 0.8rem; color: var(--text-muted);">Capital</span>`;
+
+            const riskBudgetSubEl = document.getElementById('mmRiskBudgetSub');
+            if (riskBudgetSubEl) riskBudgetSubEl.innerText = ast.tactical_posture || 'Standard Position Allocation';
+
+            const fiiStanceEl = document.getElementById('mmFiiStance');
+            if (fiiStanceEl) fiiStanceEl.innerHTML = `${deriv.fii_index_future_long_pct ?? 11.1}% <span style="font-size: 0.8rem; color: var(--text-muted);">Long</span>`;
+
+            const fiiStanceSubEl = document.getElementById('mmFiiStanceSub');
+            if (fiiStanceSubEl) fiiStanceSubEl.innerText = (deriv.positioning_stance || 'Balanced').split(' ')[0].replace(/_/g, ' ');
+
+            const indiaVixEl = document.getElementById('mmIndiaVix');
+            if (indiaVixEl) indiaVixEl.innerText = (vix.india_vix ?? 11.10).toFixed(2);
+
+            // 2. Vector 1: Derivatives
+            const fiiLongVal = document.getElementById('mmFiiLongVal');
+            if (fiiLongVal) fiiLongVal.innerText = `${deriv.fii_index_future_long_pct ?? 11.1}%`;
+            
+            const fiiShortVal = document.getElementById('mmFiiShortVal');
+            if (fiiShortVal) fiiShortVal.innerText = `${deriv.fii_index_future_short_pct ?? 88.9}%`;
+
+            const fiiSplitBar = document.getElementById('mmFiiSplitBar');
+            if (fiiSplitBar) fiiSplitBar.style.width = `${deriv.fii_index_future_long_pct ?? 11.1}%`;
+
+            const clientLongVal = document.getElementById('mmClientLongVal');
+            if (clientLongVal) clientLongVal.innerText = `${deriv.client_index_future_long_pct ?? 56.2}%`;
+
+            const pcrVal = document.getElementById('mmPcrVal');
+            if (pcrVal) pcrVal.innerText = deriv.index_options_pcr ?? 0.84;
+
+            const posStanceBadge = document.getElementById('mmPosStanceBadge');
+            if (posStanceBadge) posStanceBadge.innerText = (deriv.positioning_stance || 'COILED SPRING').split(' ')[0];
+
+            // 3. Vector 2: Breadth
+            const advCount = document.getElementById('mmAdvCount');
+            if (advCount) advCount.innerText = breadth.advances ?? 230;
+
+            const decCount = document.getElementById('mmDecCount');
+            if (decCount) decCount.innerText = breadth.declines ?? 266;
+
+            const breadthSplitBar = document.getElementById('mmBreadthSplitBar');
+            if (breadthSplitBar) breadthSplitBar.style.width = `${breadth.percent_advancing ?? 46.4}%`;
+
+            const adRatioVal = document.getElementById('mmAdRatioVal');
+            if (adRatioVal) adRatioVal.innerText = breadth.advance_decline_ratio ?? 0.86;
+
+            const netHighsVal = document.getElementById('mmNetHighsVal');
+            if (netHighsVal) {
+                const nh = breadth.net_new_52w_highs || 0;
+                netHighsVal.innerText = `${nh >= 0 ? '+' : ''}${nh} Highs`;
+            }
+
+            const highsCountVal = document.getElementById('mmHighsCountVal');
+            if (highsCountVal) highsCountVal.innerText = breadth.new_52w_highs_count || 0;
+
+            const lowsCountVal = document.getElementById('mmLowsCountVal');
+            if (lowsCountVal) lowsCountVal.innerText = breadth.new_52w_lows_count || 0;
+
+            // 4. Vector 3: Volatility
+            const vixLevel = document.getElementById('mmVixLevel');
+            if (vixLevel) vixLevel.innerText = (vix.india_vix || 11.10).toFixed(2);
+
+            const vixDelta = document.getElementById('mmVixDelta');
+            if (vixDelta) {
+                const chg = vix.vix_day_change_pct || 0;
+                vixDelta.innerText = `(${chg >= 0 ? '+' : ''}${chg}%)`;
+            }
+
+            // 5. Vector 4: Dispersion
+            const midcapSpreadVal = document.getElementById('mmMidcapSpreadVal');
+            if (midcapSpreadVal) {
+                const s = spreads.midcap_vs_nifty_spread_pct || 0;
+                midcapSpreadVal.innerText = `${s >= 0 ? '+' : ''}${s}% Alpha`;
+            }
+
+            const cashFlowVal = document.getElementById('mmCashFlowVal');
+            if (cashFlowVal) {
+                const total = flows.total_net_cr || 0;
+                cashFlowVal.innerText = `${total >= 0 ? '+₹' : '-₹'}${Math.abs(Math.round(total)).toLocaleString()} Cr Net`;
+            }
+
+            // 6. Vector 5: Sector RRG Chips
+            const leadingContainer = document.getElementById('mmLeadingChips');
+            if (leadingContainer && rot.leading_sectors) {
+                leadingContainer.innerHTML = rot.leading_sectors.map(sec => `
+                    <span class="rrg-chip" style="background: rgba(0, 255, 157, 0.12); color: var(--accent-emerald); border: 1px solid rgba(0, 255, 157, 0.3);">● ${sec}</span>
+                `).join('') || '<span style="color:var(--text-dim); font-size:0.72rem;">None</span>';
+            }
+
+            const improvingContainer = document.getElementById('mmImprovingChips');
+            if (improvingContainer && rot.improving_sectors) {
+                improvingContainer.innerHTML = rot.improving_sectors.map(sec => `
+                    <span class="rrg-chip" style="background: rgba(255, 183, 0, 0.12); color: var(--accent-amber); border: 1px solid rgba(255, 183, 0, 0.3);">● ${sec}</span>
+                `).join('') || '<span style="color:var(--text-dim); font-size:0.72rem;">None</span>';
+            }
+
+            // 7. CIO Memo
+            const cioMemoEl = document.getElementById('mmCioMemo');
+            if (cioMemoEl && ast.cio_memo) {
+                cioMemoEl.innerText = `"${ast.cio_memo}"`;
+            }
+
+            // 8. Explainable Filter Matrix
+            const filterContainer = document.getElementById('mmExplainableFiltersList');
+            if (filterContainer && filters.length > 0) {
+                filterContainer.innerHTML = filters.map(f => `
+                    <div class="explainable-filter-card">
+                        <div class="filter-name-row">
+                            <span class="filter-name">⚡ ${f.name}</span>
+                            <span class="filter-threshold-pill">${f.operator} ${f.threshold}</span>
+                        </div>
+                        <div class="filter-rationale">
+                            <strong style="color: var(--accent-emerald);">Economic Rationale:</strong> ${f.economic_rationale}
+                        </div>
+                    </div>
+                `).join('');
+            }
+
+            // 9. Sieve Waterfall
+            const sieveContainer = document.getElementById('mmSieveWaterfallContainer');
+            const sieveFinalCount = document.getElementById('mmSieveFinalCount');
+            if (sieveFinalCount) sieveFinalCount.innerText = cards.length;
+            if (sieveContainer && sieve.length > 0) {
+                sieveContainer.innerHTML = sieve.map(step => {
+                    const widthPct = Math.max(3, Math.min(100, Math.round((step.count / 5240) * 100)));
+                    return `
+                        <div class="sieve-step-bar">
+                            <span style="width: 210px; color: #cbd5e1; font-weight: 600;">${step.stage}</span>
+                            <div class="sieve-bar-outer">
+                                <div class="sieve-bar-inner" style="width: ${widthPct}%;"></div>
+                            </div>
+                            <span style="font-family: var(--font-mono); font-weight: 700; color: #fff; width: 45px; text-align: right;">${step.count}</span>
+                            <span style="font-size: 0.65rem; color: ${step.drop_pct > 0 ? 'var(--accent-rose)' : 'var(--text-dim)'}; width: 60px; text-align: right;">${step.drop_pct > 0 ? '-' + step.drop_pct + '%' : '100%'}</span>
+                        </div>
+                    `;
+                }).join('');
+            }
+
+            // 10. Trade Cards Grid
+            const setupBadge = document.getElementById('mmSetupCountBadge');
+            if (setupBadge) setupBadge.innerText = `${cards.length} Setups Found`;
+
+            const cardsGrid = document.getElementById('mmTradeCardsGrid');
+            if (cardsGrid) {
+                if (cards.length === 0) {
+                    cardsGrid.innerHTML = `
+                        <div style="color: var(--accent-amber); padding: 3rem; text-align: center; grid-column: 1 / -1;">
+                            ⚠️ No candidates passed all strict filters under this macro regime. Try lowering the RVOL slider or adjusting tactical intent.
+                        </div>
+                    `;
+                    return;
+                }
+
+                cardsGrid.innerHTML = cards.map((c, idx) => `
+                    <div class="adaptive-trade-card">
+                        <!-- Header -->
+                        <div class="trade-card-header">
+                            <div>
+                                <div style="display: flex; align-items: center; gap: 8px;">
+                                    <span class="trade-card-symbol">${c.symbol}</span>
+                                    <span class="badge-tag badge-cyan" style="font-size: 0.62rem; padding: 2px 6px;">${c.sector}</span>
+                                </div>
+                                <div class="trade-card-sector">${c.company_name} • ${c.industry || 'Equities'}</div>
+                            </div>
+                            <div style="text-align: right;">
+                                <div style="font-size: 1.2rem; font-weight: 900; color: #fff; font-family: var(--font-mono);">₹${Number(c.cmp).toFixed(2)}</div>
+                                <div style="font-size: 0.70rem; color: var(--accent-emerald); font-weight: 700;">Rank #${idx + 1}</div>
+                            </div>
+                        </div>
+
+                        <!-- Trendlyne DVM Scores -->
+                        <div class="dvm-matrix">
+                            <div>
+                                <div class="dvm-pill-label">DURABILITY</div>
+                                <div class="dvm-pill-val" style="color: ${c.dvm_durability_score >= 60 ? 'var(--accent-emerald)' : 'var(--accent-amber)'};">${c.dvm_durability_score}</div>
+                            </div>
+                            <div>
+                                <div class="dvm-pill-label">VALUATION</div>
+                                <div class="dvm-pill-val" style="color: ${c.dvm_valuation_score >= 60 ? 'var(--accent-emerald)' : 'var(--accent-cyan)'};">${c.dvm_valuation_score}</div>
+                            </div>
+                            <div>
+                                <div class="dvm-pill-label">MOMENTUM</div>
+                                <div class="dvm-pill-val" style="color: ${c.dvm_momentum_score >= 70 ? 'var(--accent-emerald)' : 'var(--accent-purple)'};">${c.dvm_momentum_score}</div>
+                            </div>
+                            <div>
+                                <div class="dvm-pill-label">COMPOSITE</div>
+                                <div class="dvm-pill-val" style="color: var(--accent-emerald);">${c.dvm_composite_score}</div>
+                            </div>
+                        </div>
+
+                        <!-- Setup Thesis -->
+                        <div style="font-size: 0.74rem; color: #cbd5e1; background: rgba(0,0,0,0.3); border-radius: 6px; padding: 0.5rem 0.65rem; line-height: 1.45;">
+                            <strong style="color: var(--accent-cyan);">Setup Thesis:</strong> ${c.setup_thesis}
+                        </div>
+
+                        <!-- 2R / 3R Execution Bracket -->
+                        <div class="bracket-ladder">
+                            <div class="bracket-grid">
+                                <div>
+                                    <div class="bracket-col-label">ENTRY</div>
+                                    <div class="bracket-col-val" style="color: var(--accent-cyan);">₹${Number(c.entry_price).toFixed(2)}</div>
+                                </div>
+                                <div>
+                                    <div class="bracket-col-label">STOP (-${c.risk_pct}%)</div>
+                                    <div class="bracket-col-val" style="color: var(--accent-rose);">₹${Number(c.stop_loss).toFixed(2)}</div>
+                                </div>
+                                <div>
+                                    <div class="bracket-col-label">TARGET 1 (2R)</div>
+                                    <div class="bracket-col-val" style="color: var(--accent-emerald);">₹${Number(c.target_1).toFixed(2)} (+${c.target_1_pct}%)</div>
+                                </div>
+                                <div>
+                                    <div class="bracket-col-label">TARGET 2 (3R)</div>
+                                    <div class="bracket-col-val" style="color: var(--accent-purple);">₹${Number(c.target_2).toFixed(2)} (+${c.target_2_pct}%)</div>
+                                </div>
+                            </div>
+                            <div style="display: flex; justify-content: space-between; font-size: 0.68rem; color: var(--text-dim); margin-top: 6px; border-top: 1px dashed rgba(255,255,255,0.08); padding-top: 4px;">
+                                <span>Risk/Reward: <strong style="color: var(--accent-emerald);">1:2.0 / 1:3.0</strong></span>
+                                <span>Sizing: <strong style="color: #fff;">${c.position_sizing_verdict}</strong></span>
+                            </div>
+                        </div>
+
+                        <!-- Actions Footer -->
+                        <div style="display: flex; gap: 0.35rem; margin-top: auto;">
+                            <a href="${c.tradingview_url}" target="_blank" rel="noopener noreferrer" class="btn-primary" style="flex: 1.1; text-decoration: none; padding: 0.38rem 0.45rem; font-size: 0.70rem; font-weight: 700; display: inline-flex; align-items: center; justify-content: center; gap: 3px; background: linear-gradient(135deg, rgba(0,240,255,0.2), rgba(0,255,157,0.2)); border: 1px solid rgba(0,240,255,0.4); color: #fff;">
+                                ↗ TV Chart
+                            </a>
+                            <button class="btn-secondary" style="padding: 0.38rem 0.5rem; font-size: 0.70rem;" onclick="openStockModalDetail('${c.symbol}')" title="360° Detailed Parameters">
+                                🔍 360°
+                            </button>
+                            <button class="btn-secondary" style="padding: 0.38rem 0.5rem; font-size: 0.70rem; color: var(--accent-purple); border-color: rgba(168,85,247,0.4);" onclick="openAIDeepDiveModal('${c.symbol}')" title="4-Seat Adversarial Institutional AI Memo">
+                                🤖 AI Memo
+                            </button>
+                            <button class="btn-secondary" style="padding: 0.38rem 0.5rem; font-size: 0.70rem; color: var(--accent-emerald); border-color: rgba(0,255,157,0.4);" onclick="addToIntradayBasket('${c.symbol}')" title="Pin to Live Tape">
+                                🎯 Focus
+                            </button>
+                        </div>
+                    </div>
+                `).join('');
+            }
+        }
+
+        function copyAllTickersForTradingView() {
+            if (!currentMarketStrategistData || !currentMarketStrategistData.tradingview_watchlist_symbols) {
+                alert("No active tickers available to copy. Please run the strategist screen first.");
+                return;
+            }
+            navigator.clipboard.writeText(currentMarketStrategistData.tradingview_watchlist_symbols)
+                .then(() => {
+                    alert(`✅ Copied ${currentMarketStrategistData.cards.length} tickers in TradingView format to clipboard!\n\n${currentMarketStrategistData.tradingview_watchlist_symbols}\n\nYou can now paste this directly into TradingView Watchlist.`);
+                })
+                .catch(err => {
+                    alert("Failed to copy to clipboard: " + err.message);
+                });
+        }
+
+        // =========================================================================
+        // Follow-Through & Continuation Probability Radar Client Logic
+        // =========================================================================
+        let currentRadarHorizon = 'TODAY';
+        let currentRadarFilter = 'ALL';
+        let currentRadarData = null;
+
+        function switchStrategistSubView(view) {
+            const macroView = document.getElementById('viewStrategistMacro');
+            const radarView = document.getElementById('viewStrategistRadar');
+            const btnMacro = document.getElementById('btnSubTabStrategy');
+            const btnRadar = document.getElementById('btnSubTabRadar');
+            const quickStrip = document.getElementById('radarQuickStatsStrip');
+
+            if (view === 'radar') {
+                if (macroView) macroView.style.display = 'none';
+                if (radarView) radarView.style.display = 'block';
+                if (btnMacro) { btnMacro.className = 'btn-secondary'; btnMacro.style.color = 'var(--text-muted)'; btnMacro.style.borderColor = 'rgba(255,255,255,0.2)'; }
+                if (btnRadar) { btnRadar.className = 'btn-primary'; btnRadar.style.color = '#fff'; }
+                if (quickStrip) quickStrip.style.display = 'inline-block';
+                if (!currentRadarData) {
+                    loadRadarDataLive(false);
+                }
+            } else {
+                if (macroView) macroView.style.display = 'block';
+                if (radarView) radarView.style.display = 'none';
+                if (btnMacro) { btnMacro.className = 'btn-primary'; btnMacro.style.color = '#fff'; }
+                if (btnRadar) { btnRadar.className = 'btn-secondary'; btnRadar.style.color = 'var(--accent-cyan)'; btnRadar.style.borderColor = 'rgba(0, 240, 255, 0.4)'; }
+                if (quickStrip) quickStrip.style.display = 'none';
+            }
+        }
+
+        function setRadarHorizon(horizon) {
+            currentRadarHorizon = horizon;
+            ['btnHorizonToday', 'btnHorizonWeekly', 'btnHorizonYearly'].forEach(id => {
+                const el = document.getElementById(id);
+                if (el) el.classList.remove('active');
+            });
+            if (horizon === 'TODAY') document.getElementById('btnHorizonToday')?.classList.add('active');
+            else if (horizon === 'WEEKLY') document.getElementById('btnHorizonWeekly')?.classList.add('active');
+            else if (horizon === 'YEARLY') document.getElementById('btnHorizonYearly')?.classList.add('active');
+
+            const subEl = document.getElementById('kpiRadarHorizonSub');
+            if (subEl) {
+                subEl.innerText = horizon === 'TODAY' ? "Horizon: Today's 1D Outperformers" :
+                                 (horizon === 'WEEKLY' ? "Horizon: 5-Day Weekly Outperformers" : "Horizon: 1-Year Compounders & 52W Highs");
+            }
+            loadRadarDataLive(false);
+        }
+
+        function setRadarFilter(filter) {
+            currentRadarFilter = filter;
+            ['chipFilterAll', 'chipFilterHighProb', 'chipFilterPullback', 'chipFilterCircuit', 'chipFilterDelivery', 'chipFilterTrap'].forEach(id => {
+                const el = document.getElementById(id);
+                if (el) el.classList.remove('active');
+            });
+            if (filter === 'ALL') document.getElementById('chipFilterAll')?.classList.add('active');
+            else if (filter === 'HIGH_PROB') document.getElementById('chipFilterHighProb')?.classList.add('active');
+            else if (filter === 'PULLBACK') document.getElementById('chipFilterPullback')?.classList.add('active');
+            else if (filter === 'CIRCUIT') document.getElementById('chipFilterCircuit')?.classList.add('active');
+            else if (filter === 'DELIVERY') document.getElementById('chipFilterDelivery')?.classList.add('active');
+            else if (filter === 'TRAP') document.getElementById('chipFilterTrap')?.classList.add('active');
+
+            applyRadarFilterAndRender();
+        }
+
+        async function loadRadarDataLive(forceRefresh = false) {
+            const grid = document.getElementById('radarCardsGrid');
+            if (grid) {
+                grid.innerHTML = `
+                    <div style="color: var(--accent-cyan); padding: 3rem; text-align: center; grid-column: 1 / -1;">
+                        <div style="font-size: 1.5rem; margin-bottom: 0.5rem;">⚡</div>
+                        <strong>Screening ${currentRadarHorizon} Outperformers across NSE...</strong>
+                        <div style="font-size: 0.74rem; color: var(--text-dim); margin-top: 4px;">
+                            Ingesting live official NSE Security-Wise Delivery bhavcopy & calculating microstructure probabilities
+                        </div>
+                    </div>
+                `;
+            }
+
+            const sortBy = document.getElementById('radarSortSelect')?.value || 'probability';
+
+            try {
+                const url = `/api/screener/continuation-radar?horizon=${encodeURIComponent(currentRadarHorizon)}&sort_by=${encodeURIComponent(sortBy)}&limit=30`;
+                const resp = await fetch(url);
+                const data = await resp.json();
+
+                if (!data.success) {
+                    if (grid) {
+                        grid.innerHTML = `
+                            <div style="color: var(--accent-rose); padding: 2rem; text-align: center; grid-column: 1 / -1;">
+                                ❌ Error loading continuation radar: ${data.error || 'Unknown error'}
+                            </div>
+                        `;
+                    }
+                    return;
+                }
+
+                currentRadarData = data;
+                const summary = data.summary || {};
+
+                // Update Provenance & Macro Badges
+                const provPill = document.getElementById('radarProvenancePill');
+                if (provPill && data.provenance) {
+                    const icon = data.provenance.is_eod_confirmed ? '🟢' : '🟡';
+                    provPill.innerText = `${icon} ${data.provenance.provenance_label}`;
+                    provPill.style.color = data.provenance.provenance_badge_color;
+                    provPill.style.borderColor = `${data.provenance.provenance_badge_color}55`;
+                    provPill.title = data.provenance.description;
+                }
+                const macroPill = document.getElementById('radarMacroWindPill');
+                if (macroPill && data.macro_context) {
+                    const ctx = data.macro_context;
+                    macroPill.innerText = `🌬️ Macro Posture: CMMI ${ctx.cmmi_score} (${ctx.overall_regime})`;
+                    macroPill.title = `Nifty Delta: ${ctx.nifty_change_pct}% | Tactical Risk Budget: ${ctx.risk_budget_pct}%`;
+                }
+                const circuitPill = document.getElementById('radarCircuitCountPill');
+                if (circuitPill) {
+                    circuitPill.innerText = `🔒 Upper Circuit Locked: ${summary.circuit_locked_setups || 0} Setups`;
+                }
+
+                // Update Telemetry KPIs
+                const kpiTotal = document.getElementById('kpiRadarTotal');
+                const kpiHigh = document.getElementById('kpiRadarHighProb');
+                const kpiInst = document.getElementById('kpiRadarInstDeliv');
+                const kpiAvg = document.getElementById('kpiRadarAvgDeliv');
+                const kpiTrap = document.getElementById('kpiRadarTrapCount');
+
+                if (kpiTotal) kpiTotal.innerText = summary.total_analyzed || 0;
+                if (kpiHigh) kpiHigh.innerHTML = `${summary.high_probability_setups || 0} <span style="font-size: 0.8rem; color: var(--text-muted);">Setups</span>`;
+                if (kpiInst) kpiInst.innerHTML = `${summary.institutional_delivery_count || 0} <span style="font-size: 0.8rem; color: var(--text-muted);">Stocks</span>`;
+                if (kpiAvg) kpiAvg.innerText = `Average Delivery: ${summary.avg_delivery_pct || 0.0}%`;
+                if (kpiTrap) kpiTrap.innerHTML = `${summary.retail_trap_warnings || 0} <span style="font-size: 0.8rem; color: var(--text-muted);">Traps</span>`;
+
+                // Update Quick Strip
+                const stripHigh = document.getElementById('kpiHighProbStrip');
+                const stripTrap = document.getElementById('kpiTrapAlertStrip');
+                const stripDeliv = document.getElementById('kpiAvgDelivStrip');
+                if (stripHigh) stripHigh.innerText = summary.high_probability_setups || 0;
+                if (stripTrap) stripTrap.innerText = summary.retail_trap_warnings || 0;
+                if (stripDeliv) stripDeliv.innerText = `${summary.avg_delivery_pct || 0}%`;
+
+                applyRadarFilterAndRender();
+            } catch (err) {
+                console.error("Failed to load continuation radar:", err);
+                if (grid) {
+                    grid.innerHTML = `
+                        <div style="color: var(--accent-rose); padding: 2rem; text-align: center; grid-column: 1 / -1;">
+                            ❌ Network error loading radar: ${err.message}
+                        </div>
+                    `;
+                }
+            }
+        }
+
+        let currentRadarViewMode = 'CARDS';
+
+        function setRadarViewMode(mode) {
+            currentRadarViewMode = mode;
+            const btnCards = document.getElementById('btnRadarViewCards');
+            const btnTable = document.getElementById('btnRadarViewTable');
+            const cardsGrid = document.getElementById('radarCardsGrid');
+            const tableContainer = document.getElementById('radarTableContainer');
+
+            if (mode === 'TABLE') {
+                if (btnCards) btnCards.classList.remove('active');
+                if (btnTable) btnTable.classList.add('active');
+                if (cardsGrid) cardsGrid.style.display = 'none';
+                if (tableContainer) tableContainer.style.display = 'block';
+            } else {
+                if (btnCards) btnCards.classList.add('active');
+                if (btnTable) btnTable.classList.remove('active');
+                if (cardsGrid) cardsGrid.style.display = 'grid';
+                if (tableContainer) tableContainer.style.display = 'none';
+            }
+            applyRadarFilterAndRender();
+        }
+
+        function applyRadarFilterAndRender() {
+            if (!currentRadarData || !currentRadarData.candidates) return;
+            const all = currentRadarData.candidates;
+            let filtered = all;
+
+            if (currentRadarFilter === 'HIGH_PROB') {
+                filtered = all.filter(c => c.continuation_probability_pct >= 70.0 && !c.is_circuit_locked);
+            } else if (currentRadarFilter === 'PULLBACK') {
+                filtered = all.filter(c => c.continuation_probability_pct >= 55.0 && c.continuation_probability_pct < 75.0 && !c.is_circuit_locked);
+            } else if (currentRadarFilter === 'CIRCUIT') {
+                filtered = all.filter(c => c.is_circuit_locked);
+            } else if (currentRadarFilter === 'DELIVERY') {
+                filtered = all.filter(c => c.delivery_pct >= 40.0);
+            } else if (currentRadarFilter === 'TRAP') {
+                filtered = all.filter(c => c.continuation_probability_pct < 45.0 || c.delivery_pct < 18.0 || c.upper_wick_ratio >= 0.35);
+            }
+
+            if (currentRadarViewMode === 'TABLE') {
+                renderRadarTable(filtered);
+            } else {
+                renderRadarCards(filtered);
+            }
+        }
+
+        function toggleCardTacticalTab(sym, tab) {
+            const pbTab = document.getElementById(`card-tab-pb-btn-${sym}`);
+            const devTab = document.getElementById(`card-tab-devils-btn-${sym}`);
+            const pbContent = document.getElementById(`card-tab-pb-${sym}`);
+            const devContent = document.getElementById(`card-tab-devils-${sym}`);
+
+            if (tab === 'DEVILS') {
+                if (pbTab) pbTab.classList.remove('active');
+                if (devTab) devTab.classList.add('active');
+                if (pbContent) pbContent.style.display = 'none';
+                if (devContent) devContent.style.display = 'block';
+            } else {
+                if (pbTab) pbTab.classList.add('active');
+                if (devTab) devTab.classList.remove('active');
+                if (pbContent) pbContent.style.display = 'block';
+                if (devContent) devContent.style.display = 'none';
+            }
+        }
+
+        function renderRadarCards(candidates) {
+            const grid = document.getElementById('radarCardsGrid');
+            if (!grid) return;
+
+            if (!candidates || candidates.length === 0) {
+                grid.innerHTML = `
+                    <div style="color: var(--text-dim); padding: 3rem; text-align: center; grid-column: 1 / -1;">
+                        🔍 No candidate equities matched the selected filter [${currentRadarFilter}] for this horizon.
+                    </div>
+                `;
+                return;
+            }
+
+            grid.innerHTML = candidates.map(c => {
+                const isCircuit = c.is_circuit_locked;
+                const isHighProb = c.continuation_probability_pct >= 70.0 && !isCircuit;
+                const isTrap = c.continuation_probability_pct < 45.0;
+                const probColor = isCircuit ? '#eab308' : (isHighProb ? '#10b981' : (isTrap ? '#ef4444' : (c.continuation_probability_pct >= 55 ? '#3b82f6' : '#f59e0b')));
+
+                // Delivery styling
+                let delivColor = '#3b82f6';
+                let delivStatus = 'Moderate';
+                if (c.delivery_pct >= 45.0) { delivColor = '#10b981'; delivStatus = 'Accumulation'; }
+                else if (c.delivery_pct < 18.0 && c.delivery_pct > 0) { delivColor = '#ef4444'; delivStatus = 'Retail Churn'; }
+                else if (c.delivery_pct === 0) { delivColor = '#94a3b8'; delivStatus = 'Pending EOD'; }
+
+                // Playbook & Brackets
+                const pb = c.orb15_playbook || {};
+                const tb = c.trade_brackets || {};
+
+                return `
+                    <div class="radar-stock-card" style="border-top: 3px solid ${probColor};">
+                        <!-- 1. Card Header -->
+                        <div class="radar-card-header">
+                            <div>
+                                <div style="display: flex; align-items: center; gap: 8px;">
+                                    <strong style="font-size: 1.12rem; color: #fff; font-family: var(--font-mono); letter-spacing: -0.01em;">${c.symbol}</strong>
+                                    <span class="badge-tag" style="background: rgba(255,255,255,0.08); font-size: 0.65rem; color: var(--text-dim);">${c.horizon}</span>
+                                    ${isCircuit ? `<span class="badge-tag" style="background: rgba(234,179,8,0.2); color: #eab308; border: 1px solid rgba(234,179,8,0.4); font-size: 0.65rem; font-weight: 800;">🔒 UC FREEZE</span>` : ''}
+                                </div>
+                                <div style="font-size: 0.72rem; color: var(--text-muted); margin-top: 3px;">
+                                    MCap: <strong style="color: #cbd5e1;">₹${c.mcap_cr} Cr</strong> • Beta: <strong style="color: #cbd5e1;">${c.beta}</strong> • RVOL: <strong style="color: #cbd5e1;">${c.rvol}x</strong>
+                                </div>
+                            </div>
+                            <div style="text-align: right;">
+                                <div style="font-size: 1.15rem; font-weight: 900; font-family: var(--font-mono); color: #fff;">₹${Number(c.cmp).toFixed(2)}</div>
+                                <div style="font-size: 0.76rem; font-weight: 800; color: ${c.day_change_pct >= 0 ? 'var(--accent-emerald)' : 'var(--accent-rose)'}; font-family: var(--font-mono); margin-top: 1px;">
+                                    ${c.day_change_pct >= 0 ? '+' : ''}${c.day_change_pct}% Today
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- 2. Hero Probability & Verdict Banner -->
+                        <div class="radar-hero-banner">
+                            <div style="display: flex; align-items: center; gap: 0.9rem;">
+                                <div>
+                                    <div style="font-size: 0.60rem; color: var(--text-dim); text-transform: uppercase; font-weight: 800; letter-spacing: 0.05em;">
+                                        Continuation Probability
+                                    </div>
+                                    <div style="font-size: 1.85rem; font-weight: 900; font-family: var(--font-mono); color: ${probColor}; line-height: 1.1;">
+                                        ${c.continuation_probability_pct}%
+                                    </div>
+                                    <div style="margin-top: 2px;">
+                                        ${c.macro_drag_pct !== 0 ? `<span style="font-size: 0.65rem; color: ${c.macro_drag_pct < 0 ? 'var(--accent-rose)' : 'var(--accent-emerald)'}; font-family: var(--font-mono); font-weight: 700;">Macro: ${c.macro_drag_pct > 0 ? '+' : ''}${c.macro_drag_pct}%</span>` : `<span style="font-size: 0.65rem; color: var(--text-dim); font-family: var(--font-mono);">Macro: Neutral</span>`}
+                                    </div>
+                                </div>
+                            </div>
+                            <div style="text-align: right; display: flex; flex-direction: column; align-items: flex-end; gap: 4px;">
+                                <span class="badge-tag" style="background: ${probColor}22; color: ${probColor}; border: 1px solid ${probColor}55; font-size: 0.72rem; font-weight: 800; padding: 4px 10px;">
+                                    ${c.verdict_badge}
+                                </span>
+                                <div style="font-size: 0.68rem; color: var(--text-dim); font-family: var(--font-mono);">
+                                    1W: <strong style="color: #fff;">${c.perf_1w_pct >= 0 ? '+' : ''}${c.perf_1w_pct}%</strong> • 1Y: <strong style="color: #fff;">${c.perf_1y_pct >= 0 ? '+' : ''}${c.perf_1y_pct}%</strong>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- 3. Dual-Pane Quantitative Metrics Deck -->
+                        <div class="radar-metrics-deck">
+                            <!-- Pane A: Physical NSE Delivery -->
+                            <div class="radar-metric-panel" style="border-left: 3px solid ${delivColor};">
+                                <div style="display: flex; justify-content: space-between; align-items: center;">
+                                    <span style="font-size: 0.62rem; color: var(--text-dim); text-transform: uppercase; font-weight: 800;">📦 NSE Demat Delivery</span>
+                                    <span style="font-size: 0.65rem; font-weight: 700; color: ${delivColor};">${delivStatus}</span>
+                                </div>
+                                <div style="display: flex; align-items: baseline; gap: 6px; margin: 2px 0;">
+                                    <span style="font-size: 1.22rem; font-weight: 900; font-family: var(--font-mono); color: ${delivColor};">${c.delivery_pct}%</span>
+                                    <span style="font-size: 0.68rem; color: var(--text-muted);">of total trades</span>
+                                </div>
+                                <div style="font-size: 0.68rem; color: var(--text-muted);">
+                                    Qty: <strong style="color: #fff;">${(c.delivery_qty / 1000).toFixed(0)}k</strong> sh (${c.delivery_turnover_cr ? '₹' + c.delivery_turnover_cr + ' Cr' : 'Demat'})
+                                </div>
+                                <div style="font-size: 0.66rem; color: var(--text-dim); margin-top: 1px;">
+                                    Trajectory: <strong style="color: ${c.trajectory_label.includes('ACCUMULATION') ? 'var(--accent-emerald)' : (c.trajectory_label.includes('CHURN') ? 'var(--accent-rose)' : '#fff')};">${c.trajectory_label.replace(/_/g, ' ')}</strong>
+                                </div>
+                                <div style="font-size: 0.66rem; color: var(--accent-cyan); margin-top: 1px;">
+                                    Float Locked: <strong>${c.fsar_pct ? c.fsar_pct + '%' : 'Pending'}</strong>
+                                </div>
+                            </div>
+
+                            <!-- Pane B: Intraday Microstructure & Elasticity -->
+                            <div class="radar-metric-panel" style="border-left: 3px solid var(--accent-cyan);">
+                                <div style="display: flex; justify-content: space-between; align-items: center;">
+                                    <span style="font-size: 0.62rem; color: var(--text-dim); text-transform: uppercase; font-weight: 800;">🔬 Auction & Elasticity</span>
+                                    <span style="font-size: 0.65rem; font-weight: 700; color: ${c.clv >= 0.8 ? 'var(--accent-emerald)' : (c.clv < 0.5 ? 'var(--accent-rose)' : 'var(--accent-cyan)')};">CLV ${c.clv_pct}%</span>
+                                </div>
+                                <div class="split-bar-container" style="height: 4px; margin: 4px 0 6px 0; background: rgba(255,255,255,0.08);">
+                                    <div class="split-bar-fill" style="width: ${c.clv_pct}%; background: ${c.clv >= 0.8 ? 'var(--accent-emerald)' : (c.clv < 0.5 ? 'var(--accent-rose)' : 'var(--accent-cyan)')};"></div>
+                                </div>
+                                <div style="display: flex; justify-content: space-between; font-size: 0.68rem;">
+                                    <span style="color: var(--text-dim);">Upper Wick:</span>
+                                    <strong style="font-family: var(--font-mono); color: ${c.upper_wick_ratio >= 0.35 ? 'var(--accent-rose)' : 'var(--accent-emerald)'};">${(c.upper_wick_ratio * 100).toFixed(1)}% shadow</strong>
+                                </div>
+                                <div style="display: flex; justify-content: space-between; font-size: 0.68rem; margin-top: 1px;">
+                                    <span style="color: var(--text-dim);">Rubber-Band:</span>
+                                    <strong style="color: ${c.ier_elasticity > 4.0 ? 'var(--accent-rose)' : '#fff'};">${c.ier_elasticity} ATR</strong>
+                                </div>
+                                <div style="display: flex; justify-content: space-between; font-size: 0.66rem; margin-top: 1px; color: var(--text-dim);">
+                                    <span>DVM Quality:</span>
+                                    <strong style="color: var(--accent-cyan);">D:${c.dvm_durability} • M:${c.dvm_momentum}</strong>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- 4. Actionable Financial Execution Bracket Ladder -->
+                        <div class="radar-bracket-ladder">
+                            <div class="bracket-grid">
+                                <div>
+                                    <div class="bracket-col-label">RECOMMENDED ENTRY</div>
+                                    <div class="bracket-col-val" style="color: var(--accent-cyan);">₹${Number(tb.recommended_entry || c.cmp).toFixed(1)}</div>
+                                </div>
+                                <div>
+                                    <div class="bracket-col-label">STOP LOSS</div>
+                                    <div class="bracket-col-val" style="color: var(--accent-rose);">₹${Number(tb.stop_loss || (c.cmp * 0.97)).toFixed(1)}</div>
+                                </div>
+                                <div>
+                                    <div class="bracket-col-label">TARGET 1 (2R)</div>
+                                    <div class="bracket-col-val" style="color: var(--accent-emerald);">₹${Number(tb.target_1_2r || (c.cmp * 1.06)).toFixed(1)}</div>
+                                </div>
+                                <div>
+                                    <div class="bracket-col-label">TARGET 2 (3R)</div>
+                                    <div class="bracket-col-val" style="color: var(--accent-purple);">₹${Number(tb.target_2_3r || (c.cmp * 1.09)).toFixed(1)}</div>
+                                </div>
+                            </div>
+                            <div style="font-size: 0.64rem; color: var(--text-dim); text-align: center; margin-top: 4px; font-family: var(--font-mono);">
+                                Risk: ₹${tb.risk_per_share || (c.atr || 1.0).toFixed(1)}/share • Realized R:R 1:2.0 / 1:3.0
+                            </div>
+                        </div>
+
+                        <!-- 5. Interactive Tactical Drawer (Playbook & Devil's Advocate) -->
+                        <div>
+                            <div class="radar-drawer-tab-bar">
+                                <button id="card-tab-pb-btn-${c.symbol}" class="radar-drawer-tab active" onclick="toggleCardTacticalTab('${c.symbol}', 'PLAYBOOK')">
+                                    ⚡ 9:15 AM Tactical Playbook
+                                </button>
+                                <button id="card-tab-devils-btn-${c.symbol}" class="radar-drawer-tab" onclick="toggleCardTacticalTab('${c.symbol}', 'DEVILS')">
+                                    🛡️ Tail-Risk Invalidation
+                                </button>
+                            </div>
+
+                            <div id="card-tab-pb-${c.symbol}" class="radar-drawer-content" style="margin-top: 4px;">
+                                <div style="margin-bottom: 4px; color: #e2e8f0;">
+                                    <strong style="color: var(--accent-cyan);">Gap-Up:</strong> ${pb.gap_up_rule || 'Observe 15-minute opening range.'}
+                                </div>
+                                <div style="color: #94a3b8;">
+                                    <strong style="color: var(--accent-purple);">Pullback:</strong> ${pb.pullback_rule || 'Monitor test of yesterday VWAP.'}
+                                </div>
+                            </div>
+
+                            <div id="card-tab-devils-${c.symbol}" class="radar-drawer-content" style="display: none; margin-top: 4px; border-left: 3px solid #ef4444; color: #fca5a5; background: rgba(239, 68, 68, 0.08);">
+                                <strong>Tail-Risk Trigger:</strong> ${c.devils_advocate_invalidation}
+                            </div>
+                        </div>
+
+                        <!-- 6. Card Footer Action Bar -->
+                        <div style="display: flex; gap: 0.35rem; margin-top: auto; padding-top: 4px;">
+                            <a href="${c.tradingview_chart_url}" target="_blank" rel="noopener noreferrer" class="btn-primary" style="flex: 1.1; text-decoration: none; padding: 0.38rem 0.45rem; font-size: 0.70rem; font-weight: 700; display: inline-flex; align-items: center; justify-content: center; gap: 3px; background: linear-gradient(135deg, rgba(0,240,255,0.2), rgba(0,255,157,0.2)); border: 1px solid rgba(0,240,255,0.4); color: #fff;">
+                                ↗ TV Chart
+                            </a>
+                            <button class="btn-secondary" style="padding: 0.38rem 0.5rem; font-size: 0.70rem;" onclick="openStockModalDetail('${c.symbol}')" title="360° Detailed Parameters">
+                                🔍 360°
+                            </button>
+                            <button class="btn-secondary" style="padding: 0.38rem 0.5rem; font-size: 0.70rem; color: var(--accent-purple); border-color: rgba(168,85,247,0.4);" onclick="openAIDeepDiveModal('${c.symbol}')" title="4-Seat Adversarial Institutional AI Memo">
+                                🤖 AI Memo
+                            </button>
+                            <button class="btn-secondary" style="padding: 0.38rem 0.45rem; font-size: 0.70rem;" onclick="copySingleTicker('${c.symbol}')" title="Copy Ticker">
+                                📋
+                            </button>
+                            <button class="btn-secondary" style="padding: 0.38rem 0.5rem; font-size: 0.70rem; color: var(--accent-emerald); border-color: rgba(0,255,157,0.4);" onclick="addToIntradayBasket('${c.symbol}')" title="Pin to Live Tape">
+                                🎯 Focus
+                            </button>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        function renderRadarTable(candidates) {
+            const tbody = document.getElementById('radarTableBody');
+            if (!tbody) return;
+
+            if (!candidates || candidates.length === 0) {
+                tbody.innerHTML = `
+                    <tr>
+                        <td colspan="11" style="text-align: center; padding: 2.5rem; color: var(--text-dim);">
+                            🔍 No candidate equities matched the selected filter [${currentRadarFilter}] for this horizon.
+                        </td>
+                    </tr>
+                `;
+                return;
+            }
+
+            tbody.innerHTML = candidates.map(c => {
+                const isCircuit = c.is_circuit_locked;
+                const isHighProb = c.continuation_probability_pct >= 70.0 && !isCircuit;
+                const isTrap = c.continuation_probability_pct < 45.0;
+                const probColor = isCircuit ? '#eab308' : (isHighProb ? '#10b981' : (isTrap ? '#ef4444' : (c.continuation_probability_pct >= 55 ? '#3b82f6' : '#f59e0b')));
+                const tb = c.trade_brackets || {};
+
+                return `
+                    <tr>
+                        <td style="white-space: nowrap;">
+                            <div style="display: flex; align-items: center; gap: 6px;">
+                                <a href="${c.tradingview_chart_url}" target="_blank" rel="noopener noreferrer" style="color: #fff; font-weight: 800; font-family: var(--font-mono); text-decoration: none;" title="Open in TradingView">
+                                    ${c.symbol} ↗
+                                </a>
+                                <span class="badge-tag" style="font-size: 0.60rem; background: rgba(255,255,255,0.08);">${c.horizon}</span>
+                                ${isCircuit ? `<span class="badge-tag" style="background: rgba(234,179,8,0.2); color: #eab308; font-size: 0.60rem; font-weight: 800;">🔒 UC</span>` : ''}
+                            </div>
+                            <div style="font-size: 0.65rem; color: var(--text-dim);">MCap: ₹${c.mcap_cr} Cr • Beta: ${c.beta}</div>
+                        </td>
+                        <td style="text-align: right; font-family: var(--font-mono); white-space: nowrap;">
+                            <strong style="color: #fff;">₹${Number(c.cmp).toFixed(2)}</strong>
+                            <div style="font-size: 0.70rem; color: ${c.day_change_pct >= 0 ? 'var(--accent-emerald)' : 'var(--accent-rose)'}; font-weight: 700;">
+                                ${c.day_change_pct >= 0 ? '+' : ''}${c.day_change_pct}%
+                            </div>
+                        </td>
+                        <td style="text-align: center; white-space: nowrap;">
+                            <div style="font-size: 1.05rem; font-weight: 900; font-family: var(--font-mono); color: ${probColor};">
+                                ${c.continuation_probability_pct}%
+                            </div>
+                            <div class="split-bar-container" style="height: 3px; width: 60px; margin: 2px auto 0 auto; background: rgba(255,255,255,0.08);">
+                                <div class="split-bar-fill" style="width: ${c.continuation_probability_pct}%; background: ${probColor};"></div>
+                            </div>
+                        </td>
+                        <td>
+                            <span class="badge-tag" style="background: ${probColor}22; color: ${probColor}; border: 1px solid ${probColor}44; font-size: 0.66rem; font-weight: 800; padding: 2px 6px; white-space: nowrap;">
+                                ${c.verdict_badge}
+                            </span>
+                        </td>
+                        <td style="text-align: right; font-family: var(--font-mono); white-space: nowrap;">
+                            <strong style="color: ${c.delivery_pct >= 45 ? 'var(--accent-emerald)' : (c.delivery_pct < 18 ? 'var(--accent-rose)' : '#fff')};">${c.delivery_pct}%</strong>
+                            <div style="font-size: 0.62rem; color: var(--text-dim);">${c.trajectory_label.replace(/_/g, ' ')}</div>
+                        </td>
+                        <td style="text-align: right; font-family: var(--font-mono); color: var(--accent-cyan); white-space: nowrap;">
+                            ${c.fsar_pct ? c.fsar_pct + '%' : 'Pending'}
+                        </td>
+                        <td style="text-align: right; font-family: var(--font-mono); white-space: nowrap; color: ${c.clv >= 0.8 ? 'var(--accent-emerald)' : (c.clv < 0.5 ? 'var(--accent-rose)' : '#fff')};">
+                            ${c.clv_pct}%
+                        </td>
+                        <td style="text-align: right; font-family: var(--font-mono); white-space: nowrap; color: ${c.upper_wick_ratio >= 0.35 ? 'var(--accent-rose)' : 'var(--accent-emerald)'};">
+                            ${(c.upper_wick_ratio * 100).toFixed(1)}%
+                        </td>
+                        <td style="text-align: right; font-family: var(--font-mono); white-space: nowrap;">
+                            ${c.rvol}x
+                        </td>
+                        <td style="text-align: center; font-family: var(--font-mono); font-size: 0.70rem; white-space: nowrap;">
+                            <span style="color: var(--accent-cyan);" title="Entry">₹${Number(tb.recommended_entry || c.cmp).toFixed(1)}</span> / 
+                            <span style="color: var(--accent-rose);" title="Stop Loss">₹${Number(tb.stop_loss || (c.cmp * 0.97)).toFixed(1)}</span> / 
+                            <span style="color: var(--accent-emerald);" title="Target 1 (2R)">₹${Number(tb.target_1_2r || (c.cmp * 1.06)).toFixed(1)}</span>
+                        </td>
+                        <td style="text-align: center; white-space: nowrap;">
+                            <div style="display: inline-flex; gap: 4px;">
+                                <button class="btn-secondary" style="padding: 2px 7px; font-size: 0.68rem;" onclick="copySingleTicker('${c.symbol}')" title="Copy Ticker">
+                                    📋
+                                </button>
+                                <button class="btn-secondary" style="padding: 2px 7px; font-size: 0.68rem; color: var(--accent-emerald);" onclick="addToIntradayBasket('${c.symbol}')" title="Pin to Live Tape">
+                                    🎯
+                                </button>
+                            </div>
+                        </td>
+                `;
+            }).join('');
+        }
+
+        function copyRadarTickers() {
+            if (!currentRadarData || !currentRadarData.tradingview_watchlist_string) {
+                alert("No radar tickers available to copy.");
+                return;
+            }
+            navigator.clipboard.writeText(currentRadarData.tradingview_watchlist_string)
+                .then(() => {
+                    alert(`✅ Copied ${currentRadarData.candidates.length} tickers for horizon [${currentRadarHorizon}] in TradingView format!\n\n${currentRadarData.tradingview_watchlist_string}`);
+                })
+                .catch(err => {
+                    alert("Failed to copy to clipboard: " + err.message);
+                });
+        }
+
+        function copySingleTicker(symbol) {
+            const str = `NSE:${symbol}`;
+            navigator.clipboard.writeText(str).then(() => {
+                alert(`✅ Copied ${str} to clipboard for TradingView!`);
+            });
         }
 
         // Auto load watchlist & check Upstox on page open

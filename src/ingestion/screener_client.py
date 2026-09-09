@@ -32,9 +32,6 @@ class ScreenerClient:
     """
 
     BASE_URL = "https://www.screener.in"
-    _CIRCUIT_BROKEN = False
-    _CIRCUIT_BREAK_TIMESTAMP = 0.0
-    _COOLDOWN_SECONDS = 120.0
 
     def __init__(self):
         self._session = cffi_requests.Session(impersonate="chrome124")
@@ -43,6 +40,11 @@ class ScreenerClient:
             "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
             "Accept-Language": "en-US,en;q=0.9",
         }
+        self._circuit_broken = False
+        self._circuit_break_timestamp = 0.0
+        self._consecutive_failures = 0
+        self._cooldown_seconds = 60.0
+        self._max_consecutive_failures = 5
 
     @staticmethod
     def _soup_has_table_data(soup: BeautifulSoup) -> bool:
@@ -66,20 +68,23 @@ class ScreenerClient:
         """
         import time
         now = time.time()
-        if ScreenerClient._CIRCUIT_BROKEN:
-            if now - ScreenerClient._CIRCUIT_BREAK_TIMESTAMP < ScreenerClient._COOLDOWN_SECONDS:
+        if self._circuit_broken:
+            if now - self._circuit_break_timestamp < self._cooldown_seconds:
                 logger.debug(f"[Screener] Circuit breaker active; skipping network call for {symbol}")
                 return None, "UNAVAILABLE"
             else:
-                ScreenerClient._CIRCUIT_BROKEN = False
+                self._circuit_broken = False
+                self._consecutive_failures = 0
 
         sym_clean = symbol.upper().strip().replace(".NS", "").replace(".BO", "")
         
         # 1. Try Consolidated
         url_cons = f"{self.BASE_URL}/company/{sym_clean}/consolidated/"
         try:
-            r = self._session.get(url_cons, headers=self._headers, timeout=5)
+            r = self._session.get(url_cons, headers=self._headers, timeout=10)
             if r.status_code == 200:
+                self._consecutive_failures = 0
+                self._circuit_broken = False
                 soup_c = BeautifulSoup(r.text, "html.parser")
                 if self._soup_has_table_data(soup_c):
                     logger.info(f"[Screener] Fetched CONSOLIDATED financials for {sym_clean}")
@@ -89,18 +94,21 @@ class ScreenerClient:
         except Exception as e:
             err_msg = str(e).lower()
             if "timed out" in err_msg or "connect" in err_msg or "timeout" in err_msg:
-                # Connection-level timeout indicates host is unreachable — trip circuit breaker
-                logger.warning(f"[Screener] Connection timed out on {url_cons}: {e}. Tripping circuit breaker for {ScreenerClient._COOLDOWN_SECONDS}s.")
-                ScreenerClient._CIRCUIT_BROKEN = True
-                ScreenerClient._CIRCUIT_BREAK_TIMESTAMP = now
+                self._consecutive_failures += 1
+                if self._consecutive_failures >= self._max_consecutive_failures:
+                    logger.warning(f"[Screener] {self._consecutive_failures} consecutive connection failures. Tripping circuit breaker for {self._cooldown_seconds}s.")
+                    self._circuit_broken = True
+                    self._circuit_break_timestamp = now
                 return None, "UNAVAILABLE"
             logger.debug(f"[Screener] Consolidated URL failed for {sym_clean}: {e}")
 
         # 2. Fallback to Standalone
         url_std = f"{self.BASE_URL}/company/{sym_clean}/"
         try:
-            r = self._session.get(url_std, headers=self._headers, timeout=5)
+            r = self._session.get(url_std, headers=self._headers, timeout=10)
             if r.status_code == 200:
+                self._consecutive_failures = 0
+                self._circuit_broken = False
                 soup_s = BeautifulSoup(r.text, "html.parser")
                 if self._soup_has_table_data(soup_s):
                     logger.info(f"[Screener] Fetched STANDALONE financials for {sym_clean}")
@@ -108,8 +116,11 @@ class ScreenerClient:
         except Exception as e:
             err_msg = str(e).lower()
             if "timed out" in err_msg or "connect" in err_msg or "timeout" in err_msg:
-                ScreenerClient._CIRCUIT_BROKEN = True
-                ScreenerClient._CIRCUIT_BREAK_TIMESTAMP = now
+                self._consecutive_failures += 1
+                if self._consecutive_failures >= self._max_consecutive_failures:
+                    logger.warning(f"[Screener] {self._consecutive_failures} consecutive connection failures. Tripping circuit breaker for {self._cooldown_seconds}s.")
+                    self._circuit_broken = True
+                    self._circuit_break_timestamp = now
                 return None, "UNAVAILABLE"
             logger.debug(f"[Screener] Standalone attempt failed for {sym_clean}: {e}")
 
